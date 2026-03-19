@@ -1,0 +1,428 @@
+// ==================== 全局样式 - 专业批发管理系统 ====================
+@import './variables.scss';
+@import './element-override.scss';
+
+// 一、全局重置
+// --------------------------------------------------
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  font-family: $font-family;
+  font-size: $font-base;
+  line-height: $line-height-base;
+  color: $text-regular;
+  background-color: $bg-app;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  // 移动端优化
+  @media (max-width: $breakpoint-mobile) {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+// 二、工具类（原子化设计）
+// --------------------------------------------------
+// 文字颜色
+.text-primary { color: $text-primary !important; }
+.text-regular { color: $text-regular !important; }
+.text-secondary { color: $text-secondary !important; }
+.text-success { color: $color-success !important; }
+.text-warning { color: $color-warning !important; }
+.text-danger { color: $color-danger !important; }
+
+// 字重
+.font-normal { font-weight: $font-normal !important; }
+.font-medium { font-weight: $font-medium !important; }
+.font-semibold { font-weight: $font-semibold !important; }
+.font-bold { font-weight: $font-bold !important; }
+
+// 字号
+.text-xs { font-size: $font-xs !important; }
+.text-sm { font-size: $font-sm !important; }
+.text-base { font-size: $font-base !important; }
+.text-lg { font-size: $font-lg !important; }
+.text-xl { font-size: $font-xl !important; }
+.text-2xl { font-size: $font-2xl !important; }
+.text-3xl { font-size: $font-3xl !important; }
+
+// 间距
+.mt-xs { margin-top: $spacing-xs !important; }
+.mt-sm { margin-top: $spacing-sm !important; }
+.mt-base { margin-top: $spacing-base !important; }
+.mt-lg { margin-top: $spacing-lg !important; }
+.mt-xl { margin-top: $spacing-xl !important; }
+
+.mb-xs { margin-bottom: $spacing-xs !important; }
+.mb-sm { margin-bottom: $spacing-sm !important; }
+.mb-base { margin-bottom: $spacing-base !important; }
+.mb-lg { margin-bottom: $spacing-lg !important; }
+.mb-xl { margin-bottom: $spacing-xl !important; }
+
+.ml-xs { margin-left: $spacing-xs !important; }
+.ml-sm { margin-left: $spacing-sm !important; }
+.ml-base { margin-left: $spacing-base !important; }
+.ml-lg { margin-left: $spacing-lg !important; }
+
+.mr-xs { margin-right: $spacing-xs !important; }
+.mr-sm { margin-right: $spacing-sm !important; }
+.mr-base { margin-right: $spacing-base !important; }
+.mr-lg { margin-right: $spacing-lg !important; }
+
+.p-xs { padding: $spacing-xs !important; }
+.p-sm { padding: $spacing-sm !important; }
+.p-base { padding: $spacing-base !important; }
+.p-lg { padding: $spacing-lg !important; }
+.p-xl { padding: $spacing-xl !important; }
+
+// 三、通用组件样式
+// --------------------------------------------------
+// 页面容器（PC端）
+.page-container {
+  padding: $spacing-lg;
+  min-height: calc(100vh - #{$layout-header-height});
+  background-color: $bg-app;
+}
+
+// 页面标题（极简）
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+  padding-bottom: $spacing-base;
+  border-bottom: 1px solid $border-light;
+  
+  h2 {
+    font-size: $font-2xl;
+    font-weight: $font-semibold;
+    color: $text-primary;
+    margin: 0;
+  }
+}
+
+// 内容卡片（白底 + 极细边框）
+.content-card {
+  background-color: $bg-content;
+  border: 1px solid $border-base;
+  border-radius: $radius-base;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-lg;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+// 统计卡片（数据看板）
+.stat-card {
+  background-color: $bg-content;
+  border: 1px solid $border-base;
+  border-radius: $radius-base;
+  padding: $spacing-lg;
+  display: flex;
+  align-items: center;
+  gap: $spacing-base;
+  transition: border-color $duration-base $ease-out;
+  
+  &:hover {
+    border-color: $border-dark;
+  }
+  
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: $radius-sm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    
+    i {
+      font-size: 24px;
+      color: white;
+    }
+  }
+  
+  .stat-content {
+    flex: 1;
+    
+    .stat-value {
+      font-size: $font-3xl;
+      font-weight: $font-bold;
+      color: $text-primary;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    
+    .stat-label {
+      font-size: $font-sm;
+      color: $text-secondary;
+    }
+  }
+}
+
+// 预警横条（库存预警）
+.alert-bar {
+  background-color: #FFF7ED;
+  border: 1px solid $color-warning;
+  border-left-width: 4px;
+  border-radius: $radius-sm;
+  padding: $spacing-sm $spacing-base;
+  margin-bottom: $spacing-lg;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  
+  .alert-icon {
+    color: $color-warning;
+    font-size: $font-lg;
+  }
+  
+  .alert-text {
+    color: $color-warning;
+    font-size: $font-base;
+    font-weight: $font-medium;
+  }
+  
+  &.alert-danger {
+    background-color: #FEF2F2;
+    border-color: $color-danger;
+    
+    .alert-icon,
+    .alert-text {
+      color: $color-danger;
+    }
+  }
+}
+
+// 四、骨架屏（加载占位）
+// --------------------------------------------------
+.skeleton {
+  @include skeleton-shimmer;
+  border-radius: $radius-sm;
+  
+  &-line {
+    height: 16px;
+    margin-bottom: $spacing-sm;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  &-title {
+    height: 24px;
+    width: 40%;
+    margin-bottom: $spacing-base;
+  }
+  
+  &-text {
+    height: 14px;
+    margin-bottom: $spacing-xs;
+    
+    &:nth-child(2) {
+      width: 80%;
+    }
+    
+    &:nth-child(3) {
+      width: 60%;
+    }
+  }
+  
+  &-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+  
+  &-card {
+    padding: $spacing-lg;
+    background-color: $bg-content;
+    border: 1px solid $border-base;
+    border-radius: $radius-base;
+  }
+}
+
+// 五、表格优化（精密仪表盘）
+// --------------------------------------------------
+.data-table {
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-base;
+    
+    .table-title {
+      font-size: $font-lg;
+      font-weight: $font-semibold;
+      color: $text-primary;
+    }
+    
+    .table-actions {
+      display: flex;
+      gap: $spacing-sm;
+    }
+  }
+  
+  // 状态标签（精确颜色）
+  .status-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px $spacing-xs;
+    border-radius: $radius-sm;
+    font-size: $font-xs;
+    font-weight: $font-medium;
+    border: 1px solid;
+    
+    &.status-success {
+      background-color: #F0FDF4;
+      border-color: $color-success;
+      color: $color-success;
+    }
+    
+    &.status-warning {
+      background-color: #FFF7ED;
+      border-color: $color-warning;
+      color: $color-warning;
+    }
+    
+    &.status-danger {
+      background-color: #FEF2F2;
+      border-color: $color-danger;
+      color: $color-danger;
+    }
+    
+    &.status-info {
+      background-color: #F0F9FF;
+      border-color: $color-info;
+      color: $color-info;
+    }
+  }
+  
+  // 金额显示（加粗、大号）
+  .amount {
+    font-size: $font-lg;
+    font-weight: $font-semibold;
+    color: $text-primary;
+    
+    &.amount-danger {
+      color: $color-danger;
+    }
+  }
+}
+
+// 六、表单优化（呼吸感）
+// --------------------------------------------------
+.form-section {
+  margin-bottom: $spacing-xl;
+  
+  .section-title {
+    font-size: $font-lg;
+    font-weight: $font-semibold;
+    color: $text-primary;
+    margin-bottom: $spacing-base;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px solid $border-light;
+  }
+}
+
+// 七、响应式（移动端优化）
+// --------------------------------------------------
+@media (max-width: $breakpoint-mobile) {
+  body {
+    font-size: 14px;
+  }
+  
+  .page-container {
+    padding: $spacing-sm;
+  }
+  
+  .page-header {
+    flex-direction: row;
+    align-items: center;
+    gap: $spacing-sm;
+    
+    h2 {
+      font-size: $font-xl;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+  
+  .content-card {
+    padding: $spacing-base;
+  }
+  
+  .stat-card {
+    padding: $spacing-base;
+    
+    .stat-content .stat-value {
+      font-size: $font-2xl;
+    }
+  }
+  
+  // 移动端布局容器
+  .mobile-layout {
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-color: $bg-app;
+    
+    .mobile-main {
+      width: 100%;
+      min-height: calc(100vh - 50px);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+}
+
+// 八、滚动条美化（精细线条）
+// --------------------------------------------------
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: $bg-app;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: $border-dark;
+  border-radius: $radius-sm;
+  
+  &:hover {
+    background-color: $text-secondary;
+  }
+}
+
+// 九、打印优化
+// --------------------------------------------------
+@media print {
+  .page-container {
+    background-color: white;
+  }
+  
+  .content-card {
+    border: 1px solid #000;
+  }
+}

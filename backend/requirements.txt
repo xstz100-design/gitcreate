@@ -1,0 +1,29 @@
+# FastAPI 核心
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# 数据库
+sqlmodel==0.0.16
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# 认证
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+# 环境变量
+python-dotenv==1.0.1
+
+# 工具
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# 图片处理
+Pillow==10.2.0
+
+# Telegram 通知 (可选)
+python-telegram-bot==20.8
+
+# CORS
+fastapi-cors==0.0.6

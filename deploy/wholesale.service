@@ -1,0 +1,15 @@
+[Unit]
+Description=Cambodia Wholesale Backend (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/wholesale/backend
+ExecStart=/opt/wholesale/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=PATH=/opt/wholesale/venv/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

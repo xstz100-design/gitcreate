@@ -1,0 +1,320 @@
+// ==================== Element Plus 样式覆盖 - 去AI味 ====================
+@import './variables.scss';
+
+// 一、全局重置
+// --------------------------------------------------
+.el-button {
+  // 去掉默认阴影和渐变
+  box-shadow: none !important;
+  background-image: none !important;
+  
+  // 直角设计（工业感）
+  border-radius: $radius-sm !important;
+  
+  // 边框加深
+  border-width: 1px !important;
+  
+  // 点击下沉效果
+  &:active {
+    @include button-press;
+  }
+  
+  // 主要按钮（品牌色）
+  &--primary {
+    background-color: $color-primary !important;
+    border-color: $color-primary !important;
+    
+    &:hover {
+      background-color: $color-primary-light !important;
+    }
+    
+    &:active {
+      background-color: $color-primary-dark !important;
+    }
+  }
+  
+  // 成功按钮
+  &--success {
+    background-color: $color-success !important;
+    border-color: $color-success !important;
+  }
+  
+  // 警告按钮
+  &--warning {
+    background-color: $color-warning !important;
+    border-color: $color-warning !important;
+  }
+  
+  // 危险按钮
+  &--danger {
+    background-color: $color-danger !important;
+    border-color: $color-danger !important;
+  }
+  
+  // 默认按钮（极简灰色）
+  &--default {
+    background-color: $bg-content !important;
+    border-color: $border-base !important;
+    color: $text-regular !important;
+    
+    &:hover {
+      background-color: $bg-hover !important;
+    }
+  }
+}
+
+// 二、输入框（极细边框）
+// --------------------------------------------------
+.el-input__wrapper {
+  box-shadow: none !important;
+  border: 1px solid $border-base !important;
+  border-radius: $radius-sm !important;
+  background-color: $bg-content !important;
+  
+  &:hover {
+    border-color: $border-dark !important;
+  }
+  
+  &.is-focus {
+    border-color: $color-primary !important;
+  }
+}
+
+.el-input__inner {
+  color: $text-primary !important;
+  font-size: $font-base !important;
+  height: $input-height-base !important;
+  line-height: $input-height-base !important;
+  
+  &::placeholder {
+    color: $text-secondary !important;
+  }
+}
+
+// 三、卡片（去阴影）
+// --------------------------------------------------
+.el-card {
+  box-shadow: none !important;
+  border: 1px solid $border-base !important;
+  border-radius: $radius-base !important;
+  background-color: $bg-content !important;
+}
+
+.el-card__header {
+  border-bottom: 1px solid $border-base !important;
+  padding: $spacing-base $spacing-lg !important;
+  background-color: $bg-content !important;
+}
+
+.el-card__body {
+  padding: $spacing-lg !important;
+}
+
+// 四、表格（精密仪表盘风格）
+// --------------------------------------------------
+.el-table {
+  background-color: $bg-content !important;
+  border: 1px solid $border-base !important;
+  border-radius: $radius-none !important;
+  
+  // 去掉所有阴影
+  &::before,
+  &::after {
+    display: none !important;
+  }
+  
+  // 表头（加粗、深色）
+  th.el-table__cell {
+    background-color: #FAFAFA !important;
+    color: $text-primary !important;
+    font-weight: $font-semibold !important;
+    font-size: $font-sm !important;
+    border-bottom: 1px solid $border-base !important;
+    padding: $spacing-sm $spacing-base !important;
+    height: 48px !important;
+  }
+  
+  // 表格单元格
+  td.el-table__cell {
+    border-bottom: 1px solid $border-light !important;
+    color: $text-regular !important;
+    font-size: $font-base !important;
+    padding: $spacing-base !important;
+    height: $table-row-height !important;
+  }
+  
+  // 斑马纹（极浅）
+  .el-table__row--striped {
+    background-color: #FAFBFC !important;
+  }
+  
+  // 悬浮态
+  .el-table__body tr:hover > td {
+    background-color: $bg-hover !important;
+  }
+}
+
+// 五、对话框（极简边框）
+// --------------------------------------------------
+.el-dialog {
+  border-radius: $radius-base !important;
+  box-shadow: 0 0 0 1px $border-base !important;
+}
+
+.el-dialog__header {
+  padding: $spacing-lg !important;
+  border-bottom: 1px solid $border-base !important;
+}
+
+.el-dialog__body {
+  padding: $spacing-lg !important;
+  color: $text-regular !important;
+}
+
+.el-dialog__footer {
+  padding: $spacing-base $spacing-lg $spacing-lg !important;
+  border-top: 1px solid $border-light !important;
+}
+
+// 六、分页器（简洁）
+// --------------------------------------------------
+.el-pagination {
+  button,
+  .el-pager li {
+    background-color: $bg-content !important;
+    border: 1px solid $border-base !important;
+    border-radius: $radius-sm !important;
+    color: $text-regular !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    line-height: 30px !important;
+    
+    &:hover {
+      color: $color-primary !important;
+      border-color: $color-primary !important;
+    }
+    
+    &.is-active {
+      background-color: $color-primary !important;
+      border-color: $color-primary !important;
+      color: white !important;
+    }
+  }
+}
+
+// 七、下拉菜单（极细边框）
+// --------------------------------------------------
+.el-select-dropdown {
+  border: 1px solid $border-base !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  border-radius: $radius-sm !important;
+}
+
+.el-select-dropdown__item {
+  color: $text-regular !important;
+  font-size: $font-base !important;
+  padding: 0 $spacing-base !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  
+  &:hover {
+    background-color: $bg-hover !important;
+  }
+  
+  &.is-selected {
+    color: $color-primary !important;
+    font-weight: $font-medium !important;
+    background-color: transparent !important;
+  }
+}
+
+// 八、消息提示（去圆角）
+// --------------------------------------------------
+.el-message {
+  border: 1px solid $border-base !important;
+  border-radius: $radius-sm !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  padding: $spacing-sm $spacing-base !important;
+  
+  &--success {
+    background-color: #F0FDF4 !important;
+    border-color: $color-success !important;
+    
+    .el-message__content {
+      color: $color-success !important;
+    }
+  }
+  
+  &--warning {
+    background-color: #FFF7ED !important;
+    border-color: $color-warning !important;
+    
+    .el-message__content {
+      color: $color-warning !important;
+    }
+  }
+  
+  &--error {
+    background-color: #FEF2F2 !important;
+    border-color: $color-danger !important;
+    
+    .el-message__content {
+      color: $color-danger !important;
+    }
+  }
+}
+
+// 九、标签（扁平化）
+// --------------------------------------------------
+.el-tag {
+  border-radius: $radius-sm !important;
+  border: 1px solid !important;
+  padding: 0 $spacing-xs !important;
+  height: 24px !important;
+  line-height: 22px !important;
+  font-size: $font-xs !important;
+  font-weight: $font-medium !important;
+  
+  &--success {
+    background-color: #F0FDF4 !important;
+    border-color: $color-success !important;
+    color: $color-success !important;
+  }
+  
+  &--warning {
+    background-color: #FFF7ED !important;
+    border-color: $color-warning !important;
+    color: $color-warning !important;
+  }
+  
+  &--danger {
+    background-color: #FEF2F2 !important;
+    border-color: $color-danger !important;
+    color: $color-danger !important;
+  }
+  
+  &--info {
+    background-color: #F0F9FF !important;
+    border-color: $color-info !important;
+    color: $color-info !important;
+  }
+}
+
+// 十、表单（增加呼吸感）
+// --------------------------------------------------
+.el-form-item {
+  margin-bottom: $spacing-lg !important;
+  
+  &__label {
+    color: $text-primary !important;
+    font-weight: $font-medium !important;
+    font-size: $font-base !important;
+    line-height: $line-height-base !important;
+  }
+  
+  &__error {
+    color: $color-danger !important;
+    font-size: $font-sm !important;
+    padding-top: 4px !important;
+  }
+}
