@@ -791,3 +791,137 @@ func isSuperAdmin(c *gin.Context) bool {
 
 // 确保 gorm 导入被使用
 var _ = gorm.ErrRecordNotFound
+
+// ─────────────────── Dashboard Metrics ───────────────────
+
+// GET /api/auth/dashboard-metrics
+func GetDashboardMetrics(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"active_users": 0,
+		"page_views":   0,
+	})
+}
+
+// ─────────────────── 全部注册用户（含各审核状态） ───────────────────
+
+// GET /api/auth/all-registrations?status=pending|approved|rejected
+func ListAllRegistrations(c *gin.Context) {
+	var users []models.User
+	q := database.DB.Order("created_at DESC")
+	if status := c.Query("status"); status != "" {
+		q = q.Where("approval_status = ?", status)
+	}
+	q.Find(&users)
+
+	result := make([]UserResponse, len(users))
+	for i, u := range users {
+		u := u
+		result[i] = buildUserResponse(&u)
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// ─────────────────── 待审核用户数 ───────────────────
+
+// GET /api/auth/pending-count
+func GetPendingCount(c *gin.Context) {
+	var count int64
+	database.DB.Model(&models.User{}).Where("approval_status = ?", models.ApprovalPending).Count(&count)
+	c.JSON(http.StatusOK, gin.H{"count": count})
+}
+
+// ─────────────────── 提交/重新提交审核 ───────────────────
+
+// POST /api/auth/submit-review
+func SubmitForReview(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user.ApprovalStatus == models.ApprovalApproved {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "账号已通过审核"})
+		return
+	}
+	database.DB.Model(user).Updates(map[string]interface{}{
+		"approval_status": models.ApprovalPending,
+		"rejected_reason": nil,
+	})
+	database.DB.First(user, user.ID)
+	c.JSON(http.StatusOK, buildUserResponse(user))
+}
+
+// ─────────────────── 更新当前用户 Telegram ───────────────────
+
+type TelegramUpdateRequest struct {
+	TelegramID *int64 `json:"telegram_id"`
+}
+
+// PATCH /api/auth/me/telegram
+func UpdateMeTelegram(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	var req TelegramUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+	if req.TelegramID != nil {
+		// 检查是否被其他用户占用
+		var existing models.User
+		if database.DB.Where("telegram_id = ? AND id != ?", *req.TelegramID, user.ID).First(&existing).Error == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": "该 Telegram 账号已绑定其他用户"})
+			return
+		}
+		database.DB.Model(user).Update("telegram_id", *req.TelegramID)
+	} else {
+		database.DB.Model(user).Update("telegram_id", nil)
+	}
+	database.DB.First(user, user.ID)
+	c.JSON(http.StatusOK, buildUserResponse(user))
+}
+
+// POST /api/auth/me/telegram/bind-current — 与 BindTelegram 相同逻辑
+func BindCurrentTelegram(c *gin.Context) {
+	BindTelegram(c)
+}
+
+// ─────────────────── 手机验证码（存根） ───────────────────
+
+// POST /api/auth/phone-verification/send
+func SendPhoneVerification(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "验证码已发送"})
+}
+
+// POST /api/auth/phone-verification/verify
+func VerifyPhoneCode(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "验证成功"})
+}
+
+// POST /api/auth/phone-verification/telegram-verify
+func TelegramVerifyPhone(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "验证成功"})
+}
+
+// ─────────────────── 删除用户（管理员） ───────────────────
+
+// DELETE /api/auth/users/:id
+func DeleteUser(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	currentUser := middleware.CurrentUser(c)
+	if currentUser.ID == id {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "不能删除自己"})
+		return
+	}
+	var user models.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "用户不存在"})
+		return
+	}
+	if user.IsSuperAdmin {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "不能删除超级管理员"})
+		return
+	}
+	database.DB.Model(&user).Update("is_active", false)
+	c.JSON(http.StatusOK, gin.H{"message": "用户已停用"})
+}
+
+// POST /api/auth/users/:id/super-admin — 同 PATCH，兼容前端 POST 调用
+func SetSuperAdminPost(c *gin.Context) {
+	UpdateSuperAdmin(c)
+}

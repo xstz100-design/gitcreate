@@ -84,6 +84,9 @@ func main() {
 	{
 		authPub.POST("/login", handlers.Login)
 		authPub.POST("/telegram-auth", handlers.TelegramAuth)
+		authPub.POST("/phone-verification/send", handlers.SendPhoneVerification)
+		authPub.POST("/phone-verification/verify", handlers.VerifyPhoneCode)
+		authPub.POST("/phone-verification/telegram-verify", handlers.TelegramVerifyPhone)
 	}
 
 	// ── Auth（需登录）
@@ -91,8 +94,11 @@ func main() {
 	{
 		authAuth.GET("/me", handlers.GetMe)
 		authAuth.PATCH("/me", handlers.UpdateMe)
+		authAuth.PATCH("/me/telegram", handlers.UpdateMeTelegram)
+		authAuth.POST("/me/telegram/bind-current", handlers.BindCurrentTelegram)
 		authAuth.POST("/change-password", handlers.ChangePassword)
 		authAuth.POST("/bind-telegram", handlers.BindTelegram)
+		authAuth.POST("/submit-review", handlers.SubmitForReview)
 	}
 
 	// ── Auth（管理员）
@@ -102,27 +108,35 @@ func main() {
 		authAdmin.POST("/register", handlers.Register)
 		authAdmin.GET("/users/:id", handlers.GetUser)
 		authAdmin.PATCH("/users/:id", handlers.UpdateUser)
+		authAdmin.DELETE("/users/:id", handlers.DeleteUser)
 		authAdmin.POST("/users/:id/approve", handlers.ApproveUser)
 		authAdmin.GET("/pending-users", handlers.ListPendingUsers)
+		authAdmin.GET("/pending-count", handlers.GetPendingCount)
+		authAdmin.GET("/all-registrations", handlers.ListAllRegistrations)
 		authAdmin.POST("/users/:id/reset-password", handlers.ResetPassword)
 		authAdmin.GET("/dashboard", handlers.GetDashboard)
+		authAdmin.GET("/dashboard-metrics", handlers.GetDashboardMetrics)
 	}
 
 	// ── Auth（超级管理员）
 	authSuper := api.Group("/auth", middleware.Auth(), middleware.RequireSuperAdmin())
 	{
 		authSuper.PATCH("/users/:id/super-admin", handlers.UpdateSuperAdmin)
+		authSuper.POST("/users/:id/super-admin", handlers.SetSuperAdminPost)
 	}
 
 	// ── 商品
 	productsAuth := api.Group("/products", middleware.Auth())
 	{
 		productsAuth.GET("", handlers.ListProducts)
+		productsAuth.GET("/barcode/:barcode", handlers.GetProductByBarcode)
 		productsAuth.GET("/:id", handlers.GetProduct)
 	}
 	productsAdmin := api.Group("/products", middleware.Auth(), middleware.RequireAdmin())
 	{
 		productsAdmin.POST("", handlers.CreateProduct)
+		productsAdmin.GET("/import/template", handlers.GetImportTemplate)
+		productsAdmin.POST("/import", handlers.ImportProducts)
 		productsAdmin.PATCH("/:id", handlers.UpdateProduct)
 		productsAdmin.DELETE("/:id", handlers.DeleteProduct)
 	}
@@ -132,8 +146,11 @@ func main() {
 	{
 		ordersAuth.GET("", handlers.ListOrders)
 		ordersAuth.POST("", handlers.CreateOrder)
+		ordersAuth.GET("/picker/items/:orderId", handlers.GetPickerItems)
 		ordersAuth.GET("/:id", handlers.GetOrder)
 		ordersAuth.PATCH("/:id", handlers.UpdateOrder)
+		ordersAuth.POST("/:id/cancel", handlers.CancelOrder)
+		ordersAuth.POST("/:id/pick", handlers.MarkOrderPicked)
 	}
 	ordersAdmin := api.Group("/orders", middleware.Auth(), middleware.RequireAdmin())
 	{

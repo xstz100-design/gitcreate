@@ -552,3 +552,104 @@ func DeleteOrder(c *gin.Context) {
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "订单已取消"})
 }
+
+// ─────────────────── POST /api/orders/:id/cancel ───────────────────
+
+// POST /api/orders/:id/cancel — 商户取消自己的订单
+func CancelOrder(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	user := middleware.CurrentUser(c)
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND is_deleted = ?", id, false).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "订单不存在"})
+		return
+	}
+
+	// 商户只能取消自己的订单；管理员可取消任意订单
+	if user.Role == models.RoleMerchant && order.MerchantID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"detail": "无权取消此订单"})
+		return
+	}
+
+	// 只有 pending 状态可取消
+	if order.DeliveryStatus != models.DeliveryPending {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "只有待处理的订单可以取消"})
+		return
+	}
+
+	// 恢复库存
+	var items []models.OrderItem
+	database.DB.Where("order_id = ?", id).Find(&items)
+	for _, item := range items {
+		database.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
+			UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity))
+	}
+
+	database.DB.Model(&order).Updates(map[string]interface{}{
+		"delivery_status": models.DeliveryCancelled,
+		"updated_at":      models.NowCambodia(),
+	})
+	database.DB.Preload("Items.Product").Preload("Merchant").First(&order, id)
+	merchantName := ""
+	if order.Merchant != nil {
+		merchantName = order.Merchant.FullName
+	}
+	c.JSON(http.StatusOK, buildOrderResponse(&order, merchantName))
+}
+
+// ─────────────────── 配货员视图 ───────────────────
+
+// GET /api/orders/picker/items/:orderId
+func GetPickerItems(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("orderId"), 10, 64)
+	var order models.Order
+	if err := database.DB.Preload("Items.Product").Where("id = ? AND is_deleted = ?", id, false).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "订单不存在"})
+		return
+	}
+
+	items := make([]gin.H, len(order.Items))
+	for i, item := range order.Items {
+		productName := "已删除"
+		imageURL := ""
+		if item.Product != nil {
+			productName = item.Product.Name
+			if item.Product.ImageURL != nil {
+				imageURL = *item.Product.ImageURL
+			}
+		}
+		items[i] = gin.H{
+			"id":            item.ID,
+			"product_id":    item.ProductID,
+			"product_name":  productName,
+			"image_url":     imageURL,
+			"quantity":      item.Quantity,
+			"purchase_mode": item.PurchaseMode,
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"order_id": order.ID,
+		"order_no": order.OrderNo,
+		"items":    items,
+	})
+}
+
+// POST /api/orders/:id/pick — 标记已配货
+func MarkOrderPicked(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var order models.Order
+	if err := database.DB.Where("id = ? AND is_deleted = ?", id, false).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "订单不存在"})
+		return
+	}
+
+	user := middleware.CurrentUser(c)
+	now := models.NowCambodia()
+	database.DB.Model(&order).Updates(map[string]interface{}{
+		"picked_at":    now,
+		"picked_by_id": user.ID,
+		"updated_at":   now,
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "已标记配货完成"})
+}

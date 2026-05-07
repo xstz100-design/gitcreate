@@ -329,3 +329,30 @@ func DeleteProduct(c *gin.Context) {
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "商品已删除"})
 }
+
+// ─────────────────── 条码查询 ───────────────────
+
+// GET /api/products/barcode/:barcode
+func GetProductByBarcode(c *gin.Context) {
+	barcode := c.Param("barcode")
+	var product models.Product
+	if err := database.DB.Where("barcode = ? AND is_deleted = ?", barcode, false).First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "未找到该条码的商品"})
+		return
+	}
+	c.JSON(http.StatusOK, buildProductResponse(&product))
+}
+
+// ─────────────────── 批量导入（存根） ───────────────────
+
+// GET /api/products/import/template
+func GetImportTemplate(c *gin.Context) {
+	header := "name,name_kh,name_en,brand,unit,price_usd,stock,barcode,category\n"
+	c.Header("Content-Disposition", "attachment; filename=import_template.csv")
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(header))
+}
+
+// POST /api/products/import
+func ImportProducts(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"detail": "批量导入功能暂未开放"})
+}
