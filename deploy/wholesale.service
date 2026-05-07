@@ -6,10 +6,11 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/wholesale/backend
-ExecStart=/opt/wholesale/backend-go/wholesale
+ExecStart=/opt/wholesale/backend/wholesale
 Restart=always
 RestartSec=5
 Environment=PATH=/usr/bin:/bin
+Environment=GIN_MODE=release
 
 [Install]
 WantedBy=multi-user.target
