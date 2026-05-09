@@ -2,13 +2,15 @@
 
 面向柬埔寨批发业务的 B2B 下单与管理系统，支持 PC 管理后台、PC 商户端、移动商户端和 Telegram Mini App 场景。
 
-- 线上域名：`https://khmerai.cn`
-- 服务器：Ubuntu 22.04 / 43.134.13.229
-- 后端语言：**Go 1.22**（Gin + GORM + SQLite，无 CGO，单二进制部署）
+- **线上域名**：`https://tfyx.shop`
+- **服务器**：Ubuntu 22.04 / 43.134.13.229
+- **后端**：Go 1.22（Gin + GORM + SQLite，无 CGO，单二进制部署）
+- **前端**：Vue 3 + Vite 5，三语界面 **中文 / English / ខ្មែរ**（柬埔寨语）
 
 ---
 
 ## 整体架构
+
 
 ```
 用户浏览器 / Telegram Mini App
@@ -76,7 +78,7 @@ Vue dist          Go /api
 │   └── src/
 │       ├── api/index.js      # 全部 Axios API 封装
 │       ├── components/       # SkeletonProduct、SkeletonTable
-│       ├── i18n/             # 中/英双语（zh.js / en.js）
+│       ├── i18n/             # 三语支持（zh.js / en.js / kh.js）
 │       ├── layouts/          # AdminLayout、MerchantLayout、MobileLayout
 │       ├── router/index.js   # 路由定义 + 设备自动跳转守卫
 │       ├── stores/           # user.js（登录态）、cart.js（购物车持久化）
@@ -205,6 +207,24 @@ Vue dist          Go /api
 
 未通过审核的商户可浏览商品和使用购物车，提交订单时被拦截。
 
+### 5. 语言切换
+
+语言按钮在所有布局（AdminLayout、MerchantLayout、MobileLayout）及登录页均可切换，按顺序循环：
+
+```
+中文 → English → ខ្មែរ → 中文
+```
+
+语言偏好通过 `localStorage` 持久化。翻译文件结构：
+
+| 文件 | 语言 |
+|---|---|
+| `src/i18n/zh.js` | 中文 |
+| `src/i18n/en.js` | English |
+| `src/i18n/kh.js` | ខ្មែរ（柬埔寨语）|
+
+---
+
 ### 2. 下单流程
 
 ```
@@ -306,6 +326,18 @@ PATCH /api/billing/:id
 | `delivered_at` | 签收时间 |
 | `is_deleted` | 软删除标志 |
 
+### StockLedger（库存流水）
+
+| 字段 | 说明 |
+|---|---|
+| `product_id` | 关联商品 |
+| `order_id` | 关联订单（可为空） |
+| `delta` | 变动量（负数=扣减，正数=回补） |
+| `stock_after` | 变动后库存快照 |
+| `reason` | `order_create` / `order_cancel` / `order_delete` / `manual_adjust` / `import` |
+| `operator_id` | 操作人（可为空） |
+| `note` | 备注 |
+
 ---
 
 ## 权限模型
@@ -333,8 +365,8 @@ PATCH /api/billing/:id
 |---|---|
 | JWT 认证 | `golang-jwt/jwt v5`，每个受保护请求验证 Token |
 | 密码存储 | bcrypt rounds=12 |
-| 防重复下单 | `merchant_id + client_request_id` 唯一索引 |
-| 库存保护 | 原子 SQL 扣减，避免超卖 |
+| 防重复下单 | `merchant_id + client_request_id` 唯一索引；重复请求返回 HTTP 200 及已有订单（幂等） |
+| 库存保护 | 原子 SQL 扣减避免超卖；所有变动写入 `stock_ledger` 流水表 |
 | 商户隔离 | 订单 API 全部校验 `merchant_id = current_user_id` |
 | 软删除 | 商品和订单使用 `is_deleted`，历史数据不丢失 |
 | 上传安全 | MIME 类型白名单、UUID 重命名、图片压缩 |
@@ -365,7 +397,7 @@ PATCH /api/billing/:id
 | Pinia + persistedstate | 状态管理 + 持久化 |
 | Element Plus | PC 端 UI |
 | Vant 4 | 移动端 UI |
-| vue-i18n | 中/英双语 |
+| vue-i18n | 中文 / English / ខ្មែរ 三语切换 |
 | Axios | HTTP 请求 |
 | Sass | CSS 预处理 |
 
@@ -483,6 +515,9 @@ crontab -e
 - `approval_status` 必须为 `approved`
 - 资料完整（姓名、电话、地址）
 - 月结付款需要 `allow_credit = true`
+
+**管理员用户管理页白屏**
+- 确认 `/admin/merchants` 路由已在 `router/index.js` 注册，否则页面空白
 
 **移动端白屏**
 - 确认是否跳转到了 `/m/shop`

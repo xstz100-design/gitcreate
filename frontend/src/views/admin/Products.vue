@@ -18,6 +18,21 @@
       </div>
     </div>
 
+    <!-- 搜索和分类过滤 -->
+    <div class="search-filter-bar">
+      <el-input
+        v-model="adminSearchKeyword"
+        :placeholder="$t('product.searchPlaceholder')"
+        clearable
+        :prefix-icon="Search"
+        :style="mobile ? '' : 'max-width:300px'"
+        @clear="adminSearchKeyword = ''"
+      />
+      <el-select v-model="adminFilterCat" clearable :placeholder="$t('product.all') + ' ' + $t('admin.categories')" style="width:150px">
+        <el-option v-for="c in adminCategories" :key="c" :label="c" :value="c" />
+      </el-select>
+    </div>
+
     <!-- 桌面端: 表格视图 -->
     <el-table
       v-if="!mobile"
@@ -67,6 +82,14 @@
         </template>
       </el-table-column>
       <el-table-column :label="$t('product.stockWarning')" prop="stock_warning" width="75" />
+      <el-table-column :label="$t('product.expiryDate')" width="110" prop="expiry_date">
+        <template #default="{ row }">
+          <span v-if="row.expiry_date" :style="isExpiringSoon(row.expiry_date) ? 'color:#f56c6c;font-weight:600' : ''">
+            {{ formatDate(row.expiry_date) }}
+          </span>
+          <span v-else style="color:#ccc">-</span>
+        </template>
+      </el-table-column>
       <el-table-column :label="$t('product.status')" width="85">
         <template #default="{ row }">
           <el-switch
@@ -191,7 +214,7 @@
     <el-dialog
       v-model="quickDeltaVisible"
       :title="quickDeltaMode === 'restock' ? $t('product.restock') : $t('product.pick')"
-      width="320px"
+      :width="mobile ? '92vw' : '320px'"
       append-to-body
       destroy-on-close
     >
@@ -267,7 +290,7 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50, 100]"
-        :total="products.length"
+        :total="filteredAdminProducts.length"
         :layout="mobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
         :small="mobile"
         @size-change="handleSizeChange"
@@ -279,184 +302,319 @@
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? $t('product.editProduct') : $t('product.addProduct')"
-      :width="mobile ? '94vw' : '680px'"
+      :width="mobile ? '100vw' : '820px'"
       :fullscreen="mobile"
       destroy-on-close
+      class="product-form-dialog"
     >
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        :label-width="mobile ? '80px' : '100px'"
-        :label-position="mobile ? 'top' : 'right'"
-      >
-        <el-row :gutter="mobile ? 0 : 16">
-          <el-col :xs="24" :sm="8">
-            <el-form-item :label="$t('product.name')" prop="name">
-              <el-input v-model="form.name" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="8">
-            <el-form-item :label="$t('product.nameEn')" prop="name_en">
-              <el-input v-model="form.name_en" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="8">
-            <el-form-item :label="$t('product.nameKh')" prop="name_kh">
-              <el-input v-model="form.name_kh" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-collapse v-model="openSections" class="form-collapse">
 
-        <el-row :gutter="mobile ? 0 : 16">
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="$t('product.category')" prop="category">
-              <el-select v-model="form.category" filterable allow-create default-first-option :placeholder="$t('product.selectCategory')" style="width: 100%;">
-                <el-option
-                  v-for="cat in categoryOptions"
-                  :key="cat"
-                  :label="cat"
-                  :value="cat"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="4">
-            <el-form-item :label="$t('product.brand')" prop="brand">
-              <el-input v-model="form.brand" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="8" :sm="4">
-            <el-form-item :label="$t('product.unit')" prop="unit">
-              <el-input v-model="form.unit" :placeholder="$t('product.unitPlaceholder')" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="8" :sm="4">
-            <el-form-item :label="$t('product.sortOrder')" prop="sort_order">
-              <el-input v-model="form.sort_order" inputmode="numeric" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+          <!-- 一、供应商核心信息 -->
+          <el-collapse-item name="supplier" :title="$t('productForm.sectionSupplier')">
+            <el-row :gutter="12">
+              <el-col :span="24">
+                <el-form-item :label="$t('productForm.supplierName')">
+                  <el-input v-model="form.supplier_name" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
 
-        <el-row :gutter="mobile ? 0 : 16">
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.price')" prop="price_usd">
-              <el-input v-model="form.price_usd" inputmode="decimal" placeholder="0.00" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.retailPrice')" prop="retail_price_usd">
-              <el-input v-model="form.retail_price_usd" inputmode="decimal" placeholder="0.00" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.pricePerPiece')" prop="price_per_piece_usd">
-              <el-input v-model="form.price_per_piece_usd" inputmode="decimal" placeholder="0.00" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.pricePerPackage')" prop="price_per_package_usd">
-              <el-input v-model="form.price_per_package_usd" inputmode="decimal" placeholder="0.00" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.stock')" prop="stock">
-              <el-input v-model="form.stock" inputmode="numeric" placeholder="0" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.stockWarning')" prop="stock_warning">
-              <el-input v-model="form.stock_warning" inputmode="numeric" placeholder="10" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+          <!-- 二、商品基础主信息 -->
+          <el-collapse-item name="basic" :title="$t('productForm.sectionBasic')">
+            <el-row :gutter="12">
+              <el-col :xs="8" :sm="4">
+                <el-form-item :label="$t('productForm.no')">
+                  <el-input v-model="form.sort_order" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="16" :sm="10">
+                <el-form-item :label="$t('productForm.barcode')">
+                  <el-input v-model="form.barcode" clearable>
+                    <template #append>
+                      <el-button :icon="Camera" @click="openBarcodeScan" :title="$t('product.scanBarcode')" />
+                    </template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="5">
+                <el-form-item :label="$t('productForm.brand')">
+                  <el-input v-model="form.brand" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="5">
+                <el-form-item :label="$t('product.category')">
+                  <el-select v-model="form.category" filterable allow-create default-first-option :placeholder="$t('product.selectCategory')" style="width:100%">
+                    <el-option v-for="cat in categoryOptions" :key="cat" :label="cat" :value="cat" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-        <el-form-item :label="$t('product.description')" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
-        </el-form-item>
+            <el-row :gutter="12">
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="$t('productForm.productName')" prop="name">
+                  <el-input v-model="form.name" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.unitWeightValue')">
+                  <el-input v-model="form.unit_weight_value" inputmode="decimal" placeholder="0.00" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.unitWeightUnit')">
+                  <el-select v-model="form.unit_weight_unit" style="width:100%">
+                    <el-option label="G" value="G" />
+                    <el-option label="ML" value="ML" />
+                    <el-option label="Pcs" value="Pcs" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-        <el-row :gutter="mobile ? 0 : 16">
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.specs')" prop="specs">
-              <el-input v-model="form.specs" :placeholder="$t('product.specsPlaceholder')" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-form-item :label="$t('product.piecesPerPackage')" prop="pieces_per_package">
-              <el-input v-model="form.pieces_per_package" inputmode="numeric" style="width: 100%;" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="$t('product.barcode')" prop="barcode">
-              <el-input v-model="form.barcode" :placeholder="$t('product.barcodePlaceholder')" clearable>
-                <template #prefix>
-                  <el-icon><Goods /></el-icon>
-                </template>
-                <template #append>
-                  <el-button :icon="Camera" @click="openBarcodeScan" :title="$t('product.scanBarcode')" />
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
+            <el-row :gutter="12">
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="$t('productForm.packingFormat')">
+                  <el-input v-model="form.packing_format" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.packSize')">
+                  <el-input v-model="form.pack_size" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.shelfLifeDays')">
+                  <el-input v-model="form.shelf_life_days" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-        <el-row :gutter="mobile ? 0 : 16">
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="$t('product.productionDate')" prop="production_date">
-              <el-date-picker
-                v-model="form.production_date"
-                type="date"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="$t('product.expiryDate')" prop="expiry_date">
-              <el-date-picker
-                v-model="form.expiry_date"
-                type="date"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+            <el-row :gutter="12">
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.costUSD')" prop="price_usd">
+                  <el-input v-model="form.price_usd" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.retailPriceUSD')">
+                  <el-input v-model="form.retail_price_usd" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.gpPercent')">
+                  <el-input v-model="form.gp_percent" inputmode="decimal" placeholder="0.00" style="width:100%">
+                    <template #suffix>%</template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('productForm.principleCompany')">
+                  <el-input v-model="form.principle_company" />
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-        <!-- 图片上传区域 -->
-        <el-form-item :label="$t('product.images')">
-          <div class="image-upload-area" @paste="onPasteImage">
-            <div v-for="idx in 5" :key="idx" class="image-slot">
-              <div v-if="form[`img${idx}`]" class="image-preview">
-                <el-image :src="form[`img${idx}`]" fit="cover" style="width: 100%; height: 100%;" />
-                <div class="image-actions">
-                  <el-icon @click="removeImage(idx)"><delete /></el-icon>
+            <el-row :gutter="12">
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="$t('productForm.countryOfOrigin')">
+                  <el-input v-model="form.country_of_origin" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('product.productionDate')">
+                  <el-date-picker v-model="form.production_date" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="6">
+                <el-form-item :label="$t('product.expiryDate')">
+                  <el-date-picker v-model="form.expiry_date" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <!-- 商品图片 -->
+            <el-form-item :label="$t('productForm.productPicture')">
+              <div class="image-upload-area" @paste="onPasteImage">
+                <div v-for="idx in 5" :key="idx" class="image-slot">
+                  <div v-if="form[`img${idx}`]" class="image-preview">
+                    <el-image :src="form[`img${idx}`]" fit="cover" style="width: 100%; height: 100%;" />
+                    <div class="image-actions">
+                      <el-icon @click="removeImage(idx)"><delete /></el-icon>
+                    </div>
+                  </div>
+                  <el-upload
+                    v-else
+                    class="image-uploader"
+                    :show-file-list="false"
+                    :http-request="(opt) => handleUpload(opt, idx)"
+                    accept=".jpg,.jpeg,.png,.webp,.gif"
+                  >
+                    <div class="upload-placeholder">
+                      <el-icon><plus /></el-icon>
+                      <span>{{ $t('product.imageN', { n: idx }) }}</span>
+                    </div>
+                  </el-upload>
                 </div>
               </div>
-              <el-upload
-                v-else
-                class="image-uploader"
-                :show-file-list="false"
-                :http-request="(opt) => handleUpload(opt, idx)"
-                accept=".jpg,.jpeg,.png,.webp,.gif"
-              >
-                <div class="upload-placeholder">
-                  <el-icon><plus /></el-icon>
-                  <span>{{ $t('product.imageN', { n: idx }) }}</span>
-                </div>
-              </el-upload>
-            </div>
-          </div>
-          <div class="upload-tip">{{ $t('product.uploadTip5') }} | {{ $t('product.pasteTip') }}</div>
-        </el-form-item>
+              <div class="upload-tip">{{ $t('product.uploadTip5') }} | {{ $t('product.pasteTip') }}</div>
+            </el-form-item>
 
-        <el-form-item :label="$t('product.status')" prop="is_active">
-          <el-switch v-model="form.is_active" :active-text="$t('product.onSale')" :inactive-text="$t('product.offSale')" />
-        </el-form-item>
+            <!-- 库存与状态 -->
+            <el-row :gutter="12">
+              <el-col :xs="12" :sm="4">
+                <el-form-item :label="$t('product.stock')">
+                  <el-input v-model="form.stock" inputmode="numeric" placeholder="0" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="4">
+                <el-form-item :label="$t('product.stockWarning')">
+                  <el-input v-model="form.stock_warning" inputmode="numeric" placeholder="10" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('product.status')">
+                  <el-switch v-model="form.is_active" :active-text="$t('product.onSale')" :inactive-text="$t('product.offSale')" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('product.featured')">
+                  <el-switch v-model="form.is_featured" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
 
-        <el-form-item :label="$t('product.featured')" prop="is_featured">
-          <el-switch v-model="form.is_featured" :active-text="$t('product.featured')" :inactive-text="''" />
-        </el-form-item>
+          <!-- 三、商品多语言名称 -->
+          <el-collapse-item name="names" :title="$t('productForm.sectionNames')">
+            <el-row :gutter="12">
+              <el-col :xs="24" :sm="8">
+                <el-form-item :label="$t('productForm.nameEn')">
+                  <el-input v-model="form.name_en" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="8">
+                <el-form-item :label="$t('productForm.nameKh')">
+                  <el-input v-model="form.name_kh" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="8">
+                <el-form-item :label="$t('productForm.nameZh')">
+                  <el-input v-model="form.name" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item :label="$t('product.description')">
+              <el-input v-model="form.description" type="textarea" :rows="2" />
+            </el-form-item>
+          </el-collapse-item>
+
+          <!-- 四、包装规格层级 -->
+          <el-collapse-item name="packing" :title="$t('productForm.sectionPacking')">
+            <el-row :gutter="12">
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.unitLabel')">
+                  <el-input v-model="form.unit" :placeholder="$t('product.unitPlaceholder')" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.packLabel')">
+                  <el-input v-model="form.pack_name" :placeholder="$t('product.packNamePlaceholder')" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.caseLabel')">
+                  <el-input v-model="form.unit_name" :placeholder="$t('product.unitNamePlaceholder')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="12">
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.innerPackPerCase')">
+                  <el-input v-model="form.inner_pack_per_case" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.unitPerInnerPack')">
+                  <el-input v-model="form.unit_per_inner_pack" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="8" :sm="8">
+                <el-form-item :label="$t('productForm.unitPerCase')">
+                  <el-input v-model="form.unit_per_case" inputmode="numeric" style="width:100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
+
+          <!-- 五、成本与价格核算 -->
+          <el-collapse-item name="cost" :title="$t('productForm.sectionCost')">
+            <el-row :gutter="12">
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.costPerCase')">
+                  <el-input v-model="form.cost_per_case" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.dcPercent')">
+                  <el-input v-model="form.dc_percent" inputmode="decimal" placeholder="0.00" style="width:100%">
+                    <template #suffix>%</template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.netCostPerCase')">
+                  <el-input v-model="form.net_cost_per_case" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="12">
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.netCostPerUnit')">
+                  <el-input v-model="form.net_cost_per_unit" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.inclVat')">
+                  <el-input v-model="form.price_incl_vat" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="12" :sm="8">
+                <el-form-item :label="$t('productForm.exclVat')">
+                  <el-input v-model="form.price_excl_vat" inputmode="decimal" placeholder="0.00" style="width:100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-collapse-item>
+
+          <!-- 六、包装尺寸与重量 -->
+          <el-collapse-item name="dimensions" :title="$t('productForm.sectionDimensions')">
+            <div class="dim-group-title">{{ $t('productForm.smallestUnit') }}</div>
+            <el-row :gutter="12">
+              <el-col :span="6"><el-form-item :label="$t('productForm.widthCm')"><el-input v-model="form.unit_width_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.lengthCm')"><el-input v-model="form.unit_length_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.heightCm')"><el-input v-model="form.unit_height_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.weightKg')"><el-input v-model="form.unit_weight_kg" inputmode="decimal" /></el-form-item></el-col>
+            </el-row>
+            <div class="dim-group-title">{{ $t('productForm.middlePack') }}</div>
+            <el-row :gutter="12">
+              <el-col :span="6"><el-form-item :label="$t('productForm.widthCm')"><el-input v-model="form.pack_width_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.lengthCm')"><el-input v-model="form.pack_length_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.heightCm')"><el-input v-model="form.pack_height_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.weightKg')"><el-input v-model="form.pack_weight_kg" inputmode="decimal" /></el-form-item></el-col>
+            </el-row>
+            <div class="dim-group-title">{{ $t('productForm.outerCase') }}</div>
+            <el-row :gutter="12">
+              <el-col :span="6"><el-form-item :label="$t('productForm.widthCm')"><el-input v-model="form.case_width_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.lengthCm')"><el-input v-model="form.case_length_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.heightCm')"><el-input v-model="form.case_height_cm" inputmode="decimal" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item :label="$t('productForm.weightKg')"><el-input v-model="form.case_weight_kg" inputmode="decimal" /></el-form-item></el-col>
+            </el-row>
+          </el-collapse-item>
+
+        </el-collapse>
       </el-form>
 
       <template #footer>
@@ -475,7 +633,7 @@
         ref="uploadRef"
         :auto-upload="false"
         :limit="1"
-        accept=".csv"
+        accept=".csv,.xlsx"
         :on-change="onImportFileChange"
         :on-remove="() => (importFile = null)"
       >
@@ -519,12 +677,21 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Delete, Goods, Upload, Camera } from '@element-plus/icons-vue'
+import { Plus, Delete, Goods, Upload, Camera, Search } from '@element-plus/icons-vue'
 import { Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { getProducts, createProduct, updateProduct, deleteProduct, uploadImage, getAllCategories, importProducts, getProductImportTemplateUrl } from '@/api'
 import { formatUSD } from '@/utils/format'
+
+const formatDate = (d) => {
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+const isExpiringSoon = (d, days = 30) => {
+  if (!d) return false
+  return (new Date(d) - Date.now()) / 86400000 <= days
+}
 
 const { t } = useI18n()
 
@@ -572,7 +739,9 @@ const submitImport = async () => {
   importing.value = true
   importResult.value = null
   try {
-    const data = await importProducts(importFile.value, importOverwrite.value)
+    const fd = new FormData()
+    fd.append('file', importFile.value)
+    const data = await importProducts(fd)
     importResult.value = data
     ElMessage.success(t('product.importDone'))
     await loadProducts()
@@ -645,11 +814,36 @@ const confirmManual = () => {
 // 分页
 const currentPage = ref(1)
 const pageSize = ref(20)
+const adminSearchKeyword = ref('')
+const adminFilterCat = ref('')
+
+const adminCategories = computed(() => {
+  const cats = [...new Set(products.value.map(p => p.category).filter(Boolean))]
+  return cats.sort()
+})
+
+const filteredAdminProducts = computed(() => {
+  let list = products.value
+  if (adminFilterCat.value) {
+    list = list.filter(p => p.category === adminFilterCat.value)
+  }
+  if (adminSearchKeyword.value.trim()) {
+    const kw = adminSearchKeyword.value.toLowerCase()
+    list = list.filter(p =>
+      (p.name && p.name.toLowerCase().includes(kw)) ||
+      (p.name_kh && p.name_kh.toLowerCase().includes(kw)) ||
+      (p.name_en && p.name_en.toLowerCase().includes(kw)) ||
+      (p.category && p.category.toLowerCase().includes(kw)) ||
+      (p.brand && p.brand.toLowerCase().includes(kw))
+    )
+  }
+  return list
+})
 
 const paginatedProducts = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
-  return products.value.slice(start, end)
+  return filteredAdminProducts.value.slice(start, end)
 })
 
 const handleSizeChange = () => { currentPage.value = 1 }
@@ -657,35 +851,61 @@ const handleCurrentChange = () => { window.scrollTo({ top: 0, behavior: 'smooth'
 
 const form = reactive({
   id: null,
-  name: '',
-  name_kh: '',
-  name_en: '',
+  // 一、供应商
+  supplier_name: '',
+  // 二、基础信息
+  sort_order: 0,
+  barcode: '',
   brand: '',
-  country_of_origin: '',
   category: '',
-  unit: '',
+  name: '',
+  unit_weight_value: '',
+  unit_weight_unit: 'G',
+  packing_format: '',
+  pack_size: '',
   price_usd: '',
   retail_price_usd: '',
-  price_per_piece_usd: '',
-  price_per_package_usd: '',
-  pieces_per_package: '',
-  stock: 0,
-  stock_warning: 10,
-  description: '',
-  image_url: '',
-  img1: '',
-  img2: '',
-  img3: '',
-  img4: '',
-  img5: '',
-  specs: '',
-  barcode: '',
+  gp_percent: '',
+  shelf_life_days: '',
+  principle_company: '',
+  country_of_origin: '',
   production_date: null,
   expiry_date: null,
-  sort_order: 0,
+  image_url: '',
+  img1: '', img2: '', img3: '', img4: '', img5: '',
+  stock: 0,
+  stock_warning: 10,
   is_active: true,
   is_featured: false,
+  // 三、多语言名称
+  name_en: '',
+  name_kh: '',
+  description: '',
+  // 四、包装规格层级
+  unit: '',
+  pack_name: '',
+  unit_name: '',
+  inner_pack_per_case: '',
+  unit_per_inner_pack: '',
+  unit_per_case: '',
+  pieces_per_package: '',
+  // 五、成本与价格
+  cost_per_case: '',
+  dc_percent: '',
+  net_cost_per_case: '',
+  net_cost_per_unit: '',
+  price_incl_vat: '',
+  price_excl_vat: '',
+  price_per_piece_usd: '',
+  price_per_package_usd: '',
+  // 六、尺寸重量
+  unit_width_cm: '', unit_length_cm: '', unit_height_cm: '', unit_weight_kg: '',
+  pack_width_cm: '', pack_length_cm: '', pack_height_cm: '', pack_weight_kg: '',
+  case_width_cm: '', case_length_cm: '', case_height_cm: '', case_weight_kg: '',
+  specs: '',
 })
+
+const openSections = ref(['supplier', 'basic', 'names', 'packing', 'cost', 'dimensions'])
 
 const rules = {
   name: [{ required: true, message: () => t('product.nameRequired'), trigger: 'blur' }],
@@ -774,37 +994,31 @@ const loadProducts = async () => {
 const resetForm = () => {
   Object.assign(form, {
     id: null,
-    name: '',
-    name_kh: '',
-    name_en: '',
-    brand: '',
-    country_of_origin: '',
-    category: '',
-    unit: '',
-    price_usd: '',
-    retail_price_usd: '',
-    price_per_piece_usd: '',
-    price_per_package_usd: '',
+    supplier_name: '',
+    sort_order: 0, barcode: '', brand: '', category: '', name: '',
+    unit_weight_value: '', unit_weight_unit: 'G',
+    packing_format: '', pack_size: '',
+    price_usd: '', retail_price_usd: '', gp_percent: '',
+    shelf_life_days: '', principle_company: '', country_of_origin: '',
+    production_date: null, expiry_date: null,
+    image_url: '', img1: '', img2: '', img3: '', img4: '', img5: '',
+    stock: 0, stock_warning: 10, is_active: true, is_featured: false,
+    name_en: '', name_kh: '', description: '',
+    unit: '', pack_name: '', unit_name: '',
+    inner_pack_per_case: '', unit_per_inner_pack: '', unit_per_case: '',
     pieces_per_package: '',
-    stock: 0,
-    stock_warning: 10,
-    description: '',
-    image_url: '',
-    img1: '',
-    img2: '',
-    img3: '',
-    img4: '',
-    img5: '',
+    cost_per_case: '', dc_percent: '', net_cost_per_case: '',
+    net_cost_per_unit: '', price_incl_vat: '', price_excl_vat: '',
+    price_per_piece_usd: '', price_per_package_usd: '',
+    unit_width_cm: '', unit_length_cm: '', unit_height_cm: '', unit_weight_kg: '',
+    pack_width_cm: '', pack_length_cm: '', pack_height_cm: '', pack_weight_kg: '',
+    case_width_cm: '', case_length_cm: '', case_height_cm: '', case_weight_kg: '',
     specs: '',
-    barcode: '',
-    production_date: null,
-    expiry_date: null,
-    sort_order: 0,
-    is_active: true,
-    is_featured: false,
   })
   formRef.value?.clearValidate()
 }
+
+const toStr = (v) => (v != null ? String(v) : '')
 
 const handleAdd = () => {
   resetForm()
@@ -815,26 +1029,53 @@ const handleAdd = () => {
 const handleEdit = (row) => {
   Object.assign(form, {
     ...row,
-    name_kh: row.name_kh || '',
+    supplier_name: row.supplier_name || '',
+    name: row.name || '',
     name_en: row.name_en || '',
+    name_kh: row.name_kh || '',
     brand: row.brand || '',
     country_of_origin: row.country_of_origin || '',
-    retail_price_usd: row.retail_price_usd != null ? String(row.retail_price_usd) : '',
-    price_per_piece_usd: row.price_per_piece_usd != null ? String(row.price_per_piece_usd) : '',
-    price_per_package_usd: row.price_per_package_usd != null ? String(row.price_per_package_usd) : '',
-    pieces_per_package: row.pieces_per_package != null ? String(row.pieces_per_package) : '',
-    price_usd: row.price_usd != null ? String(row.price_usd) : '',
-    img1: row.img1 || '',
-    img2: row.img2 || '',
-    img3: row.img3 || '',
-    img4: row.img4 || '',
-    img5: row.img5 || '',
-    specs: row.specs || '',
+    packing_format: row.packing_format || '',
+    principle_company: row.principle_company || '',
+    unit: row.unit || '',
+    unit_name: row.unit_name || '',
+    pack_name: row.pack_name || '',
     barcode: row.barcode || '',
-    production_date: row.production_date || null,
-    expiry_date: row.expiry_date || null,
+    description: row.description || '',
+    specs: row.specs || '',
+    unit_weight_unit: row.unit_weight_unit || 'G',
+    img1: row.img1 || '', img2: row.img2 || '', img3: row.img3 || '',
+    img4: row.img4 || '', img5: row.img5 || '',
+    production_date: row.production_date ? row.production_date.substring(0, 10) : null,
+    expiry_date: row.expiry_date ? row.expiry_date.substring(0, 10) : null,
     sort_order: row.sort_order || 0,
+    is_active: row.is_active !== false,
     is_featured: row.is_featured || false,
+    // numeric string fields
+    price_usd: toStr(row.price_usd),
+    retail_price_usd: toStr(row.retail_price_usd),
+    price_per_piece_usd: toStr(row.price_per_piece_usd),
+    price_per_package_usd: toStr(row.price_per_package_usd),
+    pieces_per_package: toStr(row.pieces_per_package),
+    unit_weight_value: toStr(row.unit_weight_value),
+    pack_size: toStr(row.pack_size),
+    gp_percent: toStr(row.gp_percent),
+    shelf_life_days: toStr(row.shelf_life_days),
+    inner_pack_per_case: toStr(row.inner_pack_per_case),
+    unit_per_inner_pack: toStr(row.unit_per_inner_pack),
+    unit_per_case: toStr(row.unit_per_case),
+    cost_per_case: toStr(row.cost_per_case),
+    dc_percent: toStr(row.dc_percent),
+    net_cost_per_case: toStr(row.net_cost_per_case),
+    net_cost_per_unit: toStr(row.net_cost_per_unit),
+    price_incl_vat: toStr(row.price_incl_vat),
+    price_excl_vat: toStr(row.price_excl_vat),
+    unit_width_cm: toStr(row.unit_width_cm), unit_length_cm: toStr(row.unit_length_cm),
+    unit_height_cm: toStr(row.unit_height_cm), unit_weight_kg: toStr(row.unit_weight_kg),
+    pack_width_cm: toStr(row.pack_width_cm), pack_length_cm: toStr(row.pack_length_cm),
+    pack_height_cm: toStr(row.pack_height_cm), pack_weight_kg: toStr(row.pack_weight_kg),
+    case_width_cm: toStr(row.case_width_cm), case_length_cm: toStr(row.case_length_cm),
+    case_height_cm: toStr(row.case_height_cm), case_weight_kg: toStr(row.case_weight_kg),
   })
   isEdit.value = true
   dialogVisible.value = true
@@ -849,8 +1090,18 @@ const handleSubmit = async () => {
       const payload = { ...form }
       delete payload.id
       // 将数字字段从字符串转换为数字
-      const floatFields = ['price_usd', 'retail_price_usd', 'price_per_piece_usd', 'price_per_package_usd']
-      const intFields = ['pieces_per_package', 'stock', 'stock_warning', 'sort_order']
+      const floatFields = [
+        'price_usd', 'retail_price_usd', 'price_per_piece_usd', 'price_per_package_usd',
+        'unit_weight_value', 'pack_size', 'gp_percent',
+        'cost_per_case', 'dc_percent', 'net_cost_per_case', 'net_cost_per_unit', 'price_incl_vat', 'price_excl_vat',
+        'unit_width_cm', 'unit_length_cm', 'unit_height_cm', 'unit_weight_kg',
+        'pack_width_cm', 'pack_length_cm', 'pack_height_cm', 'pack_weight_kg',
+        'case_width_cm', 'case_length_cm', 'case_height_cm', 'case_weight_kg',
+      ]
+      const intFields = [
+        'pieces_per_package', 'stock', 'stock_warning', 'sort_order',
+        'shelf_life_days', 'inner_pack_per_case', 'unit_per_inner_pack', 'unit_per_case',
+      ]
       for (const key of floatFields) {
         const n = parseFloat(payload[key])
         payload[key] = isNaN(n) ? null : n
@@ -1062,6 +1313,33 @@ onMounted(async () => {
   gap: 8px;
 }
 
+.search-filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-filter-bar :deep(.el-input__wrapper),
+.search-filter-bar :deep(.el-select__wrapper) {
+  height: 32px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .search-filter-bar {
+    gap: 8px;
+  }
+  .search-filter-bar :deep(.el-input),
+  .search-filter-bar :deep(.el-select) {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none !important;
+    width: auto !important;
+  }
+}
+
 .pagination-wrapper {
   display: flex;
   justify-content: center;
@@ -1151,6 +1429,32 @@ onMounted(async () => {
   font-size: 12px;
   color: #999;
   margin-top: 6px;
+}
+
+/* ========== 商品表单折叠面板 ========== */
+.form-collapse :deep(.el-collapse-item__header) {
+  font-weight: 600;
+  color: var(--el-color-primary);
+  background: #f5f7fa;
+  padding: 0 12px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+.form-collapse :deep(.el-collapse-item__content) {
+  padding: 12px 0 0;
+}
+.dim-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin: 8px 0 4px;
+  padding-left: 6px;
+  border-left: 3px solid var(--el-color-primary);
+}
+.product-form-dialog :deep(.el-dialog__body) {
+  max-height: 72vh;
+  overflow-y: auto;
+  padding: 16px 20px;
 }
 
 /* ========== 移动端卡片列表 ========== */
@@ -1357,7 +1661,7 @@ onMounted(async () => {
   }
 
   :deep(.el-dialog__body) {
-    max-height: 70vh;
+    max-height: calc(100dvh - 130px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }

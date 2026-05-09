@@ -11,11 +11,11 @@
         <el-radio-button label="all">{{ $t('picker.all') }}</el-radio-button>
       </el-radio-group>
       <el-button type="primary" plain @click="loadOrders" style="margin-left: 12px;">
-        {{ $t('common.refresh') || 'Refresh' }}
+        {{ $t('common.refresh') }}
       </el-button>
     </div>
 
-    <el-table v-loading="loading" :data="filteredOrders" border>
+    <el-table v-loading="loading" :data="filteredOrders" border style="width:100%">
       <el-table-column :label="$t('picker.orderNo')" prop="order_no" width="200" />
       <el-table-column :label="$t('order.orderTime')" width="180">
         <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
@@ -31,7 +31,7 @@
           <el-tag v-else type="warning" size="small">{{ $t('picker.pending') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="$t('common.action') || 'Action'" width="240">
+      <el-table-column :label="$t('common.action')" width="240">
         <template #default="{ row }">
           <el-button size="small" type="primary" @click="openItems(row)">
             {{ $t('picker.confirmPick') }}

@@ -25,14 +25,14 @@
     </div>
 
     <!-- 公告栏 -->
-    <div v-if="notices.length > 0" class="notice-bar">
-      <van-icon name="volume-o" class="notice-icon" />
-      <div class="notice-scroll">
-        <div class="notice-track" :style="{ animationDuration: notices.length * 15 + 's' }">
-          <span v-for="(n, i) in notices" :key="i" class="notice-item">{{ currentLang === 'zh' ? n.content_zh : n.content_en }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
-        </div>
-      </div>
-    </div>
+    <van-notice-bar
+      v-if="notices.length > 0"
+      :text="notices.map(n => currentLang === 'zh' ? n.content_zh : n.content_en).join('          ')"
+      left-icon="volume-o"
+      :speed="50"
+      background="#fffbe6"
+      color="#ad6800"
+    />
 
     <div v-if="!userStore.canOrder" class="browse-guide">
       <div class="guide-copy">
@@ -201,11 +201,12 @@
     <van-popup
       v-model:show="detailVisible"
       position="bottom"
+      teleport="body"
       :style="{ height: '85%' }"
       round
       closeable
     >
-      <div v-if="currentProduct" class="detail-sheet">
+      <div v-if="currentProduct" class="detail-sheet" @focusin="handleDetailFocusin">
         <!-- 图片轮播 -->
         <van-swipe class="detail-swipe" :autoplay="0" indicator-color="#1D4ED8">
           <van-swipe-item v-for="(img, idx) in getProductImages(currentProduct)" :key="idx">
@@ -222,9 +223,45 @@
           <h3 class="detail-name">{{ currentProduct.name }}</h3>
           <p v-if="currentProduct.name_kh" class="detail-kh">{{ currentProduct.name_kh }}</p>
 
-          <div class="detail-price-row">
-            <span class="detail-price">${{ currentProduct.price_usd }}</span>
-            <span class="detail-khr">≈ {{ formatKHR(usdToKhr(currentProduct.price_usd)) }}</span>
+          <!-- 购买规格表（参考电商下单界面：规格/单价/数量三列） -->
+          <div class="purchase-table">
+            <div class="pt-header">
+              <span class="pt-col-spec">规格</span>
+              <span class="pt-col-price">单价</span>
+              <span class="pt-col-qty">数量</span>
+            </div>
+            <!-- 默认单件 -->
+            <div class="pt-row">
+              <span class="pt-spec">{{ currentProduct.unit_name || currentProduct.unit || '件' }}</span>
+              <span class="pt-price">${{ currentProduct.price_usd }}<em>/{{ currentProduct.unit || '件' }}</em></span>
+              <div class="pt-stepper" @click.stop>
+                <van-stepper
+                  v-model="detailQtyDefault"
+                  :min="0"
+                  :max="currentProduct.stock"
+                  integer
+                  button-size="26px"
+                  input-width="36px"
+                />
+              </div>
+            </div>
+            <!-- 箱装（如有） -->
+            <div v-if="currentProduct.price_per_package_usd" class="pt-row">
+              <span class="pt-spec">
+                {{ currentProduct.pack_name || '箱' }}
+                <span v-if="currentProduct.pieces_per_package" class="pt-spec-hint">({{ currentProduct.pieces_per_package }}件/箱)</span>
+              </span>
+              <span class="pt-price">${{ currentProduct.price_per_package_usd }}<em>/箱</em></span>
+              <div class="pt-stepper" @click.stop>
+                <van-stepper
+                  v-model="detailQtyPackage"
+                  :min="0"
+                  integer
+                  button-size="26px"
+                  input-width="36px"
+                />
+              </div>
+            </div>
           </div>
 
           <!-- 建议零售价 -->
@@ -250,23 +287,13 @@
           <div v-if="currentProduct.min_order_qty > 1" class="detail-notice">
             {{ $t('product.minOrderQty') }}：{{ currentProduct.min_order_qty }} {{ currentProduct.unit }}
           </div>
+        </div>
 
-          <!-- 数量快速输入 -->
-          <div class="detail-qty">
-            <span class="qty-label">{{ $t('product.buyQty') }}</span>
-            <van-stepper
-              v-model="detailQty"
-              :min="1"
-              :max="currentProduct.stock"
-              integer
-              button-size="32"
-              input-width="56"
-            />
-          </div>
-
+        <!-- 加入购物车操作栏 -->
+        <div class="detail-footer">
           <button
             class="detail-add-btn"
-            :disabled="currentProduct.stock <= 0"
+            :disabled="currentProduct.stock <= 0 || (!detailQtyDefault && !detailQtyPackage)"
             @click="handleDetailPrimaryAction"
           >
             {{ userStore.canOrder ? $t('product.addToCart') : restrictionActionLabel }}
@@ -278,12 +305,13 @@
     <van-popup
       v-model:show="contactVisible"
       position="bottom"
+      teleport="body"
       round
       :style="{ padding: '24px 20px 32px' }"
     >
       <div class="contact-sheet">
         <div class="contact-title">{{ $t('common.contactUs') }}</div>
-        <div v-if="!contactInfo.phone && !contactInfo.telegram && !contactInfo.whatsapp" class="contact-empty">
+        <div v-if="!contactInfo.phone && !contactInfo.telegram && !contactInfo.whatsapp && !contactInfo.wechat" class="contact-empty">
           联系方式尚未设置
         </div>
         <a v-if="contactInfo.phone" :href="'tel:' + contactInfo.phone" class="contact-item">
@@ -298,6 +326,10 @@
           <van-icon name="send-gift-o" size="20" />
           <span>Telegram: {{ contactInfo.telegram }}</span>
         </a>
+        <div v-if="contactInfo.wechat" class="contact-item" @click="copyWechat">
+          <van-icon name="wechat-o" size="20" />
+          <span>WeChat: {{ contactInfo.wechat }}</span>
+        </div>
       </div>
     </van-popup>
   </div>
@@ -330,7 +362,7 @@ const currentLang = ref(getCurrentLanguage())
 
 // 联系我
 const contactVisible = ref(false)
-const contactInfo = ref({ phone: '', telegram: '', whatsapp: '' })
+const contactInfo = ref({ phone: '', telegram: '', whatsapp: '', wechat: '' })
 
 const loadContactInfo = async () => {
   try {
@@ -340,10 +372,29 @@ const loadContactInfo = async () => {
   }
 }
 
+const copyWechat = () => {
+  if (!contactInfo.value.wechat) return
+  navigator.clipboard?.writeText(contactInfo.value.wechat).then(() => {
+    showSuccessToast('已复制微信号')
+  }).catch(() => {
+    showToast('WeChat: ' + contactInfo.value.wechat)
+  })
+}
+
+// 键盘弹出后滚动输入框到可视区
+const handleDetailFocusin = (e) => {
+  if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') {
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 350)
+  }
+}
+
 // 详情弹窗
 const detailVisible = ref(false)
 const currentProduct = ref(null)
-const detailQty = ref(1)
+const detailQtyDefault = ref(0)
+const detailQtyPackage = ref(0)
 
 const restrictionTitle = computed(() => {
   switch (userStore.orderAccessState) {
@@ -518,12 +569,18 @@ const switchCategory = (id) => {
   hapticFeedback('light')
 }
 
-const onSearch = () => {}
+const onSearch = () => {
+  // 搜索时重置分类到全部，确保搜索结果不受分类过滤影响
+  if (searchKeyword.value.trim()) {
+    activeCat.value = 'all'
+  }
+}
 
 // 商品详情
 const showDetail = (product) => {
   currentProduct.value = product
-  detailQty.value = 1
+  detailQtyDefault.value = 0
+  detailQtyPackage.value = 0
   detailVisible.value = true
   hapticFeedback('medium')
 }
@@ -543,11 +600,21 @@ const addFromDetail = () => {
     goToRestrictionAction()
     return
   }
-  const success = cartStore.addItem(currentProduct.value, detailQty.value)
-  if (success) {
+  let added = false
+  if (detailQtyDefault.value > 0) {
+    cartStore.addItem(currentProduct.value, detailQtyDefault.value, 'default')
+    added = true
+  }
+  if (detailQtyPackage.value > 0 && currentProduct.value.price_per_package_usd) {
+    cartStore.addItem(currentProduct.value, detailQtyPackage.value, 'package')
+    added = true
+  }
+  if (added) {
     hapticFeedback('success')
     showSuccessToast(t('product.addedToCart'))
     detailVisible.value = false
+  } else {
+    showToast('请先选择购买数量')
   }
 }
 
@@ -600,9 +667,6 @@ onMounted(async () => {
 
 /* ---------- 搜索栏 ---------- */
 .search-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
   background: #fff;
   padding: 8px 12px;
   border-bottom: 1px solid #F0F0F0;
@@ -723,8 +787,7 @@ onMounted(async () => {
 .notice-track {
   display: inline-block;
   white-space: nowrap;
-  animation: noticeScroll linear 1;
-  animation-fill-mode: forwards;
+  animation: noticeScroll linear infinite;
 }
 
 .notice-item {
@@ -885,7 +948,7 @@ onMounted(async () => {
 /* ---------- 品类导航 ---------- */
 .category-tabs {
   position: sticky;
-  top: 52px;
+  top: 0;
   z-index: 99;
   background: #fff;
   border-bottom: 1px solid #F0F0F0;
@@ -1136,7 +1199,7 @@ onMounted(async () => {
 /* ---------- 底部结算栏 ---------- */
 .checkout-bar {
   position: fixed;
-  bottom: 50px;
+  bottom: calc(50px + env(safe-area-inset-bottom, 0px));
   left: 0;
   right: 0;
   z-index: 100;
@@ -1145,7 +1208,6 @@ onMounted(async () => {
   background: #fff;
   border-top: 1px solid #F0F0F0;
   padding: 8px 12px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
 }
 
 .cart-info {
@@ -1279,6 +1341,7 @@ onMounted(async () => {
 .detail-body {
   flex: 1;
   padding: 16px;
+  padding-bottom: 0;
   overflow-y: auto;
 }
 
@@ -1295,6 +1358,108 @@ onMounted(async () => {
   margin: 0 0 12px;
 }
 
+/* ===== 购买规格表 ===== */
+.purchase-table {
+  margin: 12px 0;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pt-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: #f8fafc;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #8c8c8c;
+  font-weight: 500;
+}
+
+.pt-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid #eef0f3;
+  transition: background 0.15s;
+}
+
+.pt-row:active {
+  background: #f5f8ff;
+}
+
+.pt-spec {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.pt-spec-hint {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+  margin-top: 1px;
+}
+
+.pt-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #d44e4e;
+}
+
+.pt-price em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  color: #999;
+}
+
+.pt-col-spec { }
+.pt-col-price { }
+.pt-col-qty { text-align: right; }
+
+.pt-stepper {
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.purchase-table .van-stepper__input) {
+  background: transparent;
+}
+
+.detail-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  background: #f5f5f5;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn.active {
+  border-color: var(--primary-color, #1D4ED8);
+  background: #EFF6FF;
+  color: var(--primary-color, #1D4ED8);
+  font-weight: 600;
+}
+
+.mode-hint {
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.8;
+}
+
 .detail-price-row {
   display: flex;
   align-items: baseline;
@@ -1306,6 +1471,11 @@ onMounted(async () => {
   font-size: 24px;
   font-weight: 700;
   color: var(--price-color, #d44e4e);
+}
+
+.detail-unit {
+  font-size: 13px;
+  color: #888;
 }
 
 .detail-khr {
@@ -1380,11 +1550,11 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 
-.detail-qty {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+.detail-footer {
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
 }
 
 .qty-label {

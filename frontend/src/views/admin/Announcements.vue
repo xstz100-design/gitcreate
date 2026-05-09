@@ -8,7 +8,6 @@
     <el-tabs v-model="activeTab" @tab-change="loadData">
       <el-tab-pane :label="$t('announcement.notice')" name="notice" />
       <el-tab-pane :label="$t('announcement.contact')" name="contact" />
-      <el-tab-pane :label="$t('announcement.about')" name="about" />
     </el-tabs>
 
     <!-- 操作栏 -->

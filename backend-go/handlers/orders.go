@@ -76,6 +76,28 @@ type OrderDetailResponse struct {
 	DaysToBilling   *int                  `json:"days_to_billing"`
 }
 
+// writeStockLedger 写库存流水（在事务 tx 内调用，传 database.DB 也可）
+// productID: 商品ID，delta: 变动量（正=入，负=出），stockAfter: 变动后库存，
+// reason: 变动原因，orderID/operatorID 可传 nil
+func writeStockLedger(tx *gorm.DB, productID int64, delta int, stockAfter int,
+	reason models.StockLedgerReason, orderID *int64, operatorID *int64, note string) {
+	now := models.NowCambodia()
+	ledger := models.StockLedger{
+		ProductID:  productID,
+		OrderID:    orderID,
+		Delta:      delta,
+		StockAfter: stockAfter,
+		Reason:     reason,
+		OperatorID: operatorID,
+		Note:       note,
+		CreatedAt:  now,
+	}
+	if err := tx.Create(&ledger).Error; err != nil {
+		// 流水写失败不影响主业务，只记日志
+		_ = err
+	}
+}
+
 func buildOrderResponse(order *models.Order, merchantName string) OrderDetailResponse {
 	items := make([]OrderItemResponse, len(order.Items))
 	for i, item := range order.Items {
@@ -253,12 +275,18 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// 幂等校验
+	// 幂等校验：相同 client_request_id 直接返回已有订单（防止弱网重试重复下单）
 	if req.ClientRequestID != nil && *req.ClientRequestID != "" {
 		var existing models.Order
-		if database.DB.Where("merchant_id = ? AND client_request_id = ? AND is_deleted = ?",
-			user.ID, *req.ClientRequestID, false).First(&existing).Error == nil {
-			c.JSON(http.StatusConflict, gin.H{"detail": "请勿重复提交订单"})
+		if database.DB.Preload("Merchant").Preload("Items.Product").
+			Where("merchant_id = ? AND client_request_id = ? AND is_deleted = ?",
+				user.ID, *req.ClientRequestID, false).
+			First(&existing).Error == nil {
+			merchantName := ""
+			if existing.Merchant != nil {
+				merchantName = existing.Merchant.FullName
+			}
+			c.JSON(http.StatusOK, buildOrderResponse(&existing, merchantName))
 			return
 		}
 	}
@@ -273,14 +301,18 @@ func CreateOrder(c *gin.Context) {
 	var orderItemsData []struct {
 		ProductID    int64
 		ProductName  string
+		NameKH       *string
+		NameEN       *string
 		Barcode      *string
 		Unit         string
+		ImageURL     *string
 		Quantity     int
 		UnitPriceUSD float64
 		SubtotalUSD  float64
 		PurchaseMode string
 	}
 	var goodsTotal float64
+	var order models.Order
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, item := range req.Items {
@@ -291,23 +323,34 @@ func CreateOrder(c *gin.Context) {
 			if !product.IsActive {
 				return fmt.Errorf("商品 %s 已下架", product.Name)
 			}
-			if product.Stock < item.Quantity {
+
+			// 确定实际扣减库存数量（按包购买时扣减 quantity × pieces_per_package）
+			purchaseMode := item.PurchaseMode
+			if purchaseMode == "" {
+				purchaseMode = "default"
+			}
+			stockDeduct := item.Quantity
+			if purchaseMode == "package" && product.PiecesPerPackage != nil && *product.PiecesPerPackage > 0 {
+				stockDeduct = item.Quantity * (*product.PiecesPerPackage)
+			}
+
+			if product.Stock < stockDeduct {
 				return fmt.Errorf("商品 %s 库存不足，当前库存: %d", product.Name, product.Stock)
 			}
 
 			// 原子扣减库存
 			result := tx.Model(&models.Product{}).
-				Where("id = ? AND stock >= ?", product.ID, item.Quantity).
-				UpdateColumn("stock", gorm.Expr("stock - ?", item.Quantity))
+				Where("id = ? AND stock >= ?", product.ID, stockDeduct).
+				UpdateColumn("stock", gorm.Expr("stock - ?", stockDeduct))
 			if result.Error != nil || result.RowsAffected == 0 {
 				return fmt.Errorf("商品 %s 库存不足，请重试", product.Name)
 			}
+			// 写库存流水（在事务内，orderID 此时尚未生成，先传 nil，创单后不补写）
+			stockAfter := product.Stock - stockDeduct
+			writeStockLedger(tx, product.ID, -stockDeduct, stockAfter,
+				models.LedgerOrderCreate, nil, &user.ID, "")
 
 			// 确定单价
-			purchaseMode := item.PurchaseMode
-			if purchaseMode == "" {
-				purchaseMode = "default"
-			}
 			var unitPrice float64
 			switch purchaseMode {
 			case "piece":
@@ -329,8 +372,11 @@ func CreateOrder(c *gin.Context) {
 			orderItemsData = append(orderItemsData, struct {
 				ProductID    int64
 				ProductName  string
+				NameKH       *string
+				NameEN       *string
 				Barcode      *string
 				Unit         string
+				ImageURL     *string
 				Quantity     int
 				UnitPriceUSD float64
 				SubtotalUSD  float64
@@ -338,8 +384,11 @@ func CreateOrder(c *gin.Context) {
 			}{
 				ProductID:    product.ID,
 				ProductName:  product.Name,
+				NameKH:       product.NameKh,
+				NameEN:       product.NameEn,
 				Barcode:      product.Barcode,
 				Unit:         product.Unit,
+				ImageURL:     product.ImageURL,
 				Quantity:     item.Quantity,
 				UnitPriceUSD: unitPrice,
 				SubtotalUSD:  subtotal,
@@ -367,7 +416,7 @@ func CreateOrder(c *gin.Context) {
 		}
 
 		now := models.NowCambodia()
-		order := models.Order{
+		order = models.Order{
 			OrderNo:         generateOrderNo(),
 			MerchantID:      user.ID,
 			TotalUSD:        totalUSD,
@@ -409,40 +458,56 @@ func CreateOrder(c *gin.Context) {
 
 		// 重新加载订单用于返回
 		tx.Preload("Merchant").Preload("Items.Product").First(&order, order.ID)
-
-		// Telegram 通知（非阻塞）
-		go func(o models.Order, items []map[string]interface{}) {
-			services.NotifyAdminsNewOrder(o.OrderNo, user.FullName, o.TotalUSD, items)
-			notifyItems := make([]map[string]interface{}, len(orderItemsData))
-			for i, d := range orderItemsData {
-				notifyItems[i] = map[string]interface{}{
-					"name":     d.ProductName,
-					"barcode":  d.Barcode,
-					"unit":     d.Unit,
-					"quantity": d.Quantity,
-				}
-			}
-			services.NotifyPickerNewOrder(o.OrderNo, o.ID, notifyItems)
-			// 库存预警检查
-			for _, d := range orderItemsData {
-				var p models.Product
-				if database.DB.First(&p, d.ProductID).Error == nil && p.IsLowStock() {
-					services.NotifyLowStock(p.Name, p.Stock)
-				}
-			}
-		}(order, nil)
-
-		merchantName := ""
-		if order.Merchant != nil {
-			merchantName = order.Merchant.FullName
-		}
-		c.JSON(http.StatusCreated, buildOrderResponse(&order, merchantName))
 		return nil
 	})
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
 	}
+
+	// 事务提交后：发送通知（非阻塞）
+	go func() {
+		services.NotifyAdminsNewOrder(order.OrderNo, user.FullName, order.TotalUSD, nil)
+		notifyItems := make([]map[string]interface{}, len(orderItemsData))
+		for i, d := range orderItemsData {
+			imgStr := ""
+			if d.ImageURL != nil {
+				imgStr = *d.ImageURL
+			}
+			nameKH := ""
+			if d.NameKH != nil {
+				nameKH = *d.NameKH
+			}
+			nameEN := ""
+			if d.NameEN != nil {
+				nameEN = *d.NameEN
+			}
+			notifyItems[i] = map[string]interface{}{
+				"name":     d.ProductName,
+				"name_kh":  nameKH,
+				"name_en":  nameEN,
+				"barcode":  d.Barcode,
+				"unit":     d.Unit,
+				"quantity": d.Quantity,
+				"image":    imgStr,
+			}
+		}
+		services.NotifyPickerNewOrder(order.OrderNo, order.ID, notifyItems)
+		// 库存预警检查
+		for _, d := range orderItemsData {
+			var p models.Product
+			if database.DB.First(&p, d.ProductID).Error == nil && p.IsLowStock() {
+				services.NotifyLowStock(p.Name, p.Stock)
+			}
+		}
+	}()
+
+	merchantName := ""
+	if order.Merchant != nil {
+		merchantName = order.Merchant.FullName
+	}
+	c.JSON(http.StatusCreated, buildOrderResponse(&order, merchantName))
 }
 
 // ─────────────────── PATCH /api/orders/:id ───────────────────
@@ -476,21 +541,9 @@ func UpdateOrder(c *gin.Context) {
 		}
 		if req.DeliveryStatus != nil {
 			updates["delivery_status"] = *req.DeliveryStatus
-			// 配送中 → 通知配送员
+			// 配送中 → 通知派送员
 			if *req.DeliveryStatus == models.DeliveryDelivering {
-				merchantName := ""
-				addr := ""
-				phone := ""
-				if order.Merchant != nil {
-					merchantName = order.Merchant.FullName
-				}
-				if order.DeliveryAddress != nil {
-					addr = *order.DeliveryAddress
-				}
-				if order.DeliveryPhone != nil {
-					phone = *order.DeliveryPhone
-				}
-				go services.NotifyDeliveryOrder(order.OrderNo, order.ID, merchantName, addr, phone)
+				go services.NotifyDeliveryOrder(order)
 			}
 			// 已送达
 			if *req.DeliveryStatus == models.DeliveryDelivered {
@@ -537,12 +590,17 @@ func DeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// 恢复库存
+	// 恢复库存（DeleteOrder）
 	var items []models.OrderItem
 	database.DB.Where("order_id = ?", id).Find(&items)
 	for _, item := range items {
-		database.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
-			UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity))
+		var prod models.Product
+		if database.DB.Select("id, stock").First(&prod, item.ProductID).Error == nil {
+			database.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
+				UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity))
+			writeStockLedger(database.DB, item.ProductID, item.Quantity, prod.Stock+item.Quantity,
+				models.LedgerOrderDelete, &id, &user.ID, "")
+		}
 	}
 
 	database.DB.Model(&order).Updates(map[string]interface{}{
@@ -578,12 +636,17 @@ func CancelOrder(c *gin.Context) {
 		return
 	}
 
-	// 恢复库存
+	// 恢复库存（CancelOrder）
 	var items []models.OrderItem
 	database.DB.Where("order_id = ?", id).Find(&items)
 	for _, item := range items {
-		database.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
-			UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity))
+		var prod models.Product
+		if database.DB.Select("id, stock").First(&prod, item.ProductID).Error == nil {
+			database.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
+				UpdateColumn("stock", gorm.Expr("stock + ?", item.Quantity))
+			writeStockLedger(database.DB, item.ProductID, item.Quantity, prod.Stock+item.Quantity,
+				models.LedgerOrderCancel, &id, &user.ID, "")
+		}
 	}
 
 	database.DB.Model(&order).Updates(map[string]interface{}{
@@ -611,19 +674,32 @@ func GetPickerItems(c *gin.Context) {
 
 	items := make([]gin.H, len(order.Items))
 	for i, item := range order.Items {
-		productName := "已删除"
-		imageURL := ""
+		name := "已删除"
+		image := ""
+		barcode := ""
+		specs := ""
+		unit := ""
 		if item.Product != nil {
-			productName = item.Product.Name
+			name = item.Product.Name
 			if item.Product.ImageURL != nil {
-				imageURL = *item.Product.ImageURL
+				image = *item.Product.ImageURL
 			}
+			if item.Product.Barcode != nil {
+				barcode = *item.Product.Barcode
+			}
+			if item.Product.Specs != nil {
+				specs = *item.Product.Specs
+			}
+			unit = item.Product.Unit
 		}
 		items[i] = gin.H{
 			"id":            item.ID,
 			"product_id":    item.ProductID,
-			"product_name":  productName,
-			"image_url":     imageURL,
+			"name":          name,
+			"image":         image,
+			"barcode":       barcode,
+			"specs":         specs,
+			"unit":          unit,
 			"quantity":      item.Quantity,
 			"purchase_mode": item.PurchaseMode,
 		}
@@ -635,21 +711,32 @@ func GetPickerItems(c *gin.Context) {
 	})
 }
 
-// POST /api/orders/:id/pick — 标记已配货
+// POST /api/orders/:id/pick — 标记已配货（同步通知派送群）
 func MarkOrderPicked(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var order models.Order
-	if err := database.DB.Where("id = ? AND is_deleted = ?", id, false).First(&order).Error; err != nil {
+	if err := database.DB.Preload("Merchant").Preload("Items.Product").
+		Where("id = ? AND is_deleted = ?", id, false).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "订单不存在"})
+		return
+	}
+
+	if order.DeliveryStatus != models.DeliveryPending {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "该订单已处理，无需重复配货"})
 		return
 	}
 
 	user := middleware.CurrentUser(c)
 	now := models.NowCambodia()
 	database.DB.Model(&order).Updates(map[string]interface{}{
-		"picked_at":    now,
-		"picked_by_id": user.ID,
-		"updated_at":   now,
+		"delivery_status": models.DeliveryDelivering,
+		"picked_at":       now,
+		"picked_by_id":    user.ID,
+		"updated_at":      now,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "已标记配货完成"})
+
+	// 通知派送群（与 Telegram bot 配货回调保持一致）
+	go services.NotifyDeliveryOrder(&order)
+
+	c.JSON(http.StatusOK, gin.H{"message": "已标记配货完成，已通知派送员"})
 }

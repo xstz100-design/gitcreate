@@ -21,8 +21,8 @@ export const useUserStore = defineStore(
 
     const isSuperAdmin = computed(() => !!userInfo.value?.is_super_admin)
 
-    // 是否是商户
-    const isMerchant = computed(() => userRole.value === 'merchant')
+    // 是否是商户（picker/delivery 均归为商户处理）
+    const isMerchant = computed(() => ['merchant', 'picker', 'delivery'].includes(userRole.value))
 
     // 资料是否完整
     const profileCompleted = computed(() => !!userInfo.value?.profile_completed)

@@ -34,71 +34,97 @@
       </div>
     </div>
     
-    <!-- 个人信息（可编辑） -->
-    <van-cell-group inset :title="$t('profile.personalInfo')">
+    <!-- 我的地址 -->
+    <van-cell-group inset style="margin-top:16px">
       <van-cell
-        :title="$t('profile.name')"
-        :value="userStore.userInfo?.full_name || $t('profile.notSet')"
-        icon="contact"
-        is-link
-        @click="editField('full_name', $t('profile.name'), userStore.userInfo?.full_name)"
-      />
-      <van-cell
-        :title="$t('profile.phone')"
-        :value="userStore.userInfo?.phone || $t('profile.notSet')"
-        icon="phone-o"
-        is-link
-        @click="handlePhoneEdit"
-      />
-      <van-cell
-        :title="$t('profile.address')"
-        :value="userStore.userInfo?.address || $t('profile.notSet')"
+        title="我的地址"
         icon="location-o"
         is-link
-        @click="editField('address', $t('profile.address'), userStore.userInfo?.address)"
-      />
-      <van-cell
-        :title="$t('profile.locationUrl')"
-        icon="guide-o"
-        is-link
-        @click="editField('location_url', $t('profile.locationUrl'), userStore.userInfo?.location_url)"
+        @click="openAddressPopup"
       >
-        <template #value>
-          <a
-            v-if="userStore.userInfo?.location_url"
-            :href="userStore.userInfo.location_url"
-            target="_blank"
-            @click.stop
-            class="map-link"
-          >{{ $t('profile.viewMap') }}</a>
-          <span v-else>{{ $t('profile.notSet') }}</span>
-        </template>
-      </van-cell>
-      <van-cell :title="$t('profile.storePhoto')" icon="photograph">
-        <template #value>
-          <div class="store-photo-cell">
-            <van-image
-              v-if="userStore.userInfo?.store_photo"
-              :src="userStore.userInfo.store_photo"
-              width="60"
-              height="45"
-              fit="cover"
-              radius="4"
-              @click="previewStorePhoto"
-            />
-            <van-uploader
-              v-else
-              :after-read="onStorePhotoRead"
-              :max-count="1"
-              accept="image/*"
-            >
-              <van-button size="mini" type="primary" plain>{{ $t('profile.uploadStorePhoto') }}</van-button>
-            </van-uploader>
-            <van-icon v-if="userStore.userInfo?.store_photo" name="cross" class="remove-photo" @click="removeStorePhoto" />
-          </div>
+        <template #label>
+          <span v-if="addressSummary" class="addr-summary-text">{{ addressSummary }}</span>
+          <span v-else class="addr-summary-empty">点击设置配送地址</span>
         </template>
       </van-cell>
     </van-cell-group>
+
+    <!-- 地址编辑弹层 -->
+    <van-popup
+      v-model:show="showAddressPopup"
+      position="bottom"
+      round
+      :style="{ maxHeight: '88%' }"
+      closeable
+    >
+      <div class="addr-popup">
+        <div class="addr-popup-title">我的地址</div>
+        <div class="addr-popup-body">
+          <van-field
+            v-model="addressForm.full_name"
+            :label="$t('profile.name')"
+            :placeholder="$t('profile.inputPrefix') + $t('profile.name')"
+            clearable
+          />
+          <van-field
+            :model-value="userStore.userInfo?.phone || ''"
+            :label="$t('profile.phone')"
+            readonly
+            is-link
+            @click="openPhoneEdit"
+          />
+          <van-field
+            v-model="addressForm.address"
+            :label="$t('profile.address')"
+            type="textarea"
+            rows="2"
+            :placeholder="$t('profile.inputPrefix') + $t('profile.address')"
+            autosize
+            clearable
+          />
+          <van-cell
+            :title="$t('profile.locationUrl')"
+            icon="guide-o"
+            is-link
+            @click="openLocationPickerFromPopup"
+          >
+            <template #value>
+              <span v-if="userStore.userInfo?.location_url" class="map-set-text">{{ $t('profile.viewMap') }}</span>
+              <span v-else>{{ $t('profile.notSet') }}</span>
+            </template>
+          </van-cell>
+          <van-cell :title="$t('profile.storePhoto')" icon="photograph">
+            <template #value>
+              <div class="store-photo-cell">
+                <van-image
+                  v-if="userStore.userInfo?.store_photo"
+                  :src="userStore.userInfo.store_photo"
+                  width="60"
+                  height="45"
+                  fit="cover"
+                  radius="4"
+                  @click="previewStorePhoto"
+                />
+                <van-uploader
+                  v-else
+                  :after-read="onStorePhotoRead"
+                  :max-count="1"
+                  accept="image/*"
+                >
+                  <van-button size="mini" type="primary" plain>{{ $t('profile.uploadStorePhoto') }}</van-button>
+                </van-uploader>
+                <van-icon v-if="userStore.userInfo?.store_photo" name="cross" class="remove-photo" @click="removeStorePhoto" />
+              </div>
+            </template>
+          </van-cell>
+        </div>
+        <div class="addr-popup-footer">
+          <van-button type="primary" block round :loading="saving" @click="handleSaveAddress">
+            {{ $t('common.save') }}
+          </van-button>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- 资料未完成时显示提交按钮 -->
     <div v-if="userStore.isMerchant && !userStore.profileCompleted" class="submit-profile-section">
@@ -171,12 +197,6 @@
         icon="service-o"
         @click="contactService"
         :label="$t('profile.contactHint')"
-      />
-      <van-cell
-        :title="$t('profile.aboutSystem')"
-        is-link
-        icon="info-o"
-        @click="showAbout = true"
       />
       <van-cell
         :title="$t('profile.clearCache')"
@@ -278,33 +298,38 @@
       </div>
     </van-dialog>
     
-    <!-- 关于弹窗 -->
+    <!-- 地图选取位置弹窗 -->
     <van-dialog
-      v-model:show="showAbout"
-      :title="$t('profile.aboutTitle')"
-      :confirm-button-text="$t('common.confirm')"
+      v-model:show="showMapPicker"
+      :title="$t('profile.pickLocation')"
+      show-cancel-button
+      :confirm-button-text="$t('common.save')"
+      :before-close="handleSaveLocation"
     >
-      <div class="about-content">
-        <div class="about-logo">
-          <img src="/images/logo1.svg" alt="Logo" />
+      <div class="map-picker-wrap">
+        <div class="map-toolbar">
+          <button class="locate-btn" @click="locateCurrentPosition" :disabled="locating">
+            <span v-if="locating">⏳ {{ $t('profile.locating') }}</span>
+            <span v-else>📍 {{ $t('profile.locateMe') }}</span>
+          </button>
         </div>
-        <p class="about-version">{{ $t('profile.aboutVersion') }}</p>
-        <div v-if="aboutInfo.length > 0" class="about-features">
-          <p v-for="(item, i) in aboutInfo" :key="i">{{ currentLang === 'zh' ? item.content_zh : item.content_en }}</p>
-        </div>
-        <div v-else class="about-features">
-          <p>{{ $t('profile.aboutFeature1') }}</p>
-          <p>{{ $t('profile.aboutFeature2') }}</p>
-          <p>{{ $t('profile.aboutFeature3') }}</p>
-          <p>{{ $t('profile.aboutFeature4') }}</p>
-        </div>
+        <div id="google-map-picker" ref="mapContainerRef" class="map-container"></div>
+        <van-field
+          v-model="pickedLocationUrl"
+          :label="$t('profile.locationUrl')"
+          :placeholder="$t('profile.locationUrlPlaceholder')"
+          clearable
+          class="map-url-field"
+        />
+        <div class="map-picker-hint">{{ $t('profile.locationPickerHint') }}</div>
       </div>
     </van-dialog>
+
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onActivated } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showToast, showDialog, showImagePreview } from 'vant'
@@ -320,10 +345,12 @@ const router = useRouter()
 const userStore = useUserStore()
 const cartStore = useCartStore()
 
-const showAbout = ref(false)
 const showPasswordDialog = ref(false)
+const showMapPicker = ref(false)
+const locating = ref(false)
+const pickedLocationUrl = ref('')
+const mapContainerRef = ref(null)
 const contactInfo = ref([])
-const aboutInfo = ref([])
 const submittingProfile = ref(false)
 const checkingStatus = ref(false)
 const notifyEnabled = ref(userStore.userInfo?.notify_enabled !== false)
@@ -337,6 +364,50 @@ const editLabel = ref('')
 const editValue = ref('')
 const sendingPhoneCode = ref(false)
 const phoneVerifyForm = reactive({ phone: '', code: '' })
+
+// ── 我的地址弹层 ──
+const showAddressPopup = ref(false)
+const saving = ref(false)
+const addressForm = reactive({ full_name: '', address: '' })
+
+const addressSummary = computed(() => {
+  const info = userStore.userInfo
+  if (!info) return ''
+  return [info.full_name, info.phone, info.address].filter(Boolean).join(' · ')
+})
+
+const openAddressPopup = () => {
+  addressForm.full_name = userStore.userInfo?.full_name || ''
+  addressForm.address = userStore.userInfo?.address || ''
+  showAddressPopup.value = true
+  hapticFeedback('light')
+}
+
+const openPhoneEdit = () => {
+  handlePhoneEdit()
+}
+
+const openLocationPickerFromPopup = () => {
+  openLocationPicker()
+}
+
+const handleSaveAddress = async () => {
+  saving.value = true
+  try {
+    const updatedUser = await updateProfile({
+      full_name: addressForm.full_name.trim(),
+      address: addressForm.address.trim(),
+    })
+    userStore.userInfo = { ...userStore.userInfo, ...updatedUser }
+    hapticFeedback('success')
+    showSuccessToast(t('profile.updateSuccess'))
+    showAddressPopup.value = false
+  } catch {
+    showToast(t('profile.updateFailed'))
+  } finally {
+    saving.value = false
+  }
+}
 
 const canDirectVerifyPhone = () => telegramMiniAppAvailable.value && !!getInitData()
 
@@ -357,6 +428,157 @@ const handlePhoneEdit = () => {
   phoneVerifyForm.code = ''
   showPhoneVerifyDialog.value = true
   hapticFeedback('light')
+}
+
+// ─────────── 地图位置选取 ───────────
+const GOOGLE_MAPS_API_KEY = 'AIzaSyBLMXrpizbEE4f36sUCerOasHVWM8Doumc'
+let googleMapInstance = null
+let googleMapMarker = null
+
+const loadGoogleMapsScript = () => {
+  if (window.google?.maps) return Promise.resolve()
+  if (document.getElementById('google-maps-script')) {
+    return new Promise(resolve => {
+      const check = setInterval(() => {
+        if (window.google?.maps) { clearInterval(check); resolve() }
+      }, 100)
+    })
+  }
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.id = 'google-maps-script'
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&language=zh-CN`
+    s.async = true
+    s.defer = true
+    s.onload = resolve
+    s.onerror = reject
+    document.head.appendChild(s)
+  })
+}
+
+// 将地图中心移到指定坐标并打上标记
+const placeMapMarker = (latlng) => {
+  if (!googleMapInstance) return
+  if (googleMapMarker) googleMapMarker.setMap(null)
+  googleMapMarker = new window.google.maps.Marker({ position: latlng, map: googleMapInstance })
+  googleMapInstance.panTo(latlng)
+  const lat = (typeof latlng.lat === 'function' ? latlng.lat() : latlng.lat).toFixed(6)
+  const lng = (typeof latlng.lng === 'function' ? latlng.lng() : latlng.lng).toFixed(6)
+  pickedLocationUrl.value = `https://maps.google.com/?q=${lat},${lng}`
+}
+
+// 定位当前位置按钮
+const locateCurrentPosition = () => {
+  if (!navigator.geolocation) {
+    showToast(t('profile.geolocationUnsupported'))
+    return
+  }
+  locating.value = true
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      locating.value = false
+      const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      if (googleMapInstance) {
+        googleMapInstance.setCenter(latlng)
+        googleMapInstance.setZoom(17)
+        placeMapMarker(latlng)
+      }
+    },
+    () => {
+      locating.value = false
+      showToast(t('profile.geolocationFailed'))
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  )
+}
+
+const openLocationPicker = async () => {
+  pickedLocationUrl.value = userStore.userInfo?.location_url || ''
+  showMapPicker.value = true
+  hapticFeedback('light')
+  await nextTick()
+  try {
+    await loadGoogleMapsScript()
+    await nextTick()
+    const container = mapContainerRef.value
+    if (!container || !window.google?.maps) return
+
+    // Phnom Penh default center
+    const defaultCenter = { lat: 11.5564, lng: 104.9282 }
+    let initCenter = defaultCenter
+
+    // If existing URL has coordinates, center there
+    const existing = pickedLocationUrl.value
+    if (existing) {
+      const m = existing.match(/[?&]q=([\-\d.]+),([\-\d.]+)/) || existing.match(/@([\-\d.]+),([\-\d.]+)/)
+      if (m) initCenter = { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+    }
+
+    googleMapInstance = new window.google.maps.Map(container, {
+      center: initCenter,
+      zoom: 15,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      // greedy：让地图独占单/双指手势，支持在弹窗内双指缩放和拖动
+      gestureHandling: 'greedy',
+    })
+
+    if (existing && initCenter !== defaultCenter) {
+      googleMapMarker = new window.google.maps.Marker({ position: initCenter, map: googleMapInstance })
+    } else if (!existing) {
+      // 没有已存坐标时，尝试自动定位
+      if (navigator.geolocation) {
+        locating.value = true
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            locating.value = false
+            const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+            googleMapInstance?.setCenter(latlng)
+            googleMapInstance?.setZoom(17)
+          },
+          () => { locating.value = false },
+          { enableHighAccuracy: true, timeout: 8000 }
+        )
+      }
+    }
+
+    googleMapInstance.addListener('click', (e) => {
+      placeMapMarker(e.latLng)
+    })
+  } catch {
+    showToast(t('profile.mapLoadFailed'))
+  }
+}
+
+const openMapLink = () => {
+  const url = userStore.userInfo?.location_url
+  if (!url) return
+  const tg = window.Telegram?.WebApp
+  if (tg?.openLink) tg.openLink(url)
+  else window.open(url, '_blank')
+}
+
+const handleSaveLocation = async (action) => {
+  if (action !== 'confirm') {
+    googleMapInstance = null; googleMapMarker = null
+    return true
+  }
+  if (!pickedLocationUrl.value.trim()) {
+    showToast(t('profile.inputRequired'))
+    return false
+  }
+  try {
+    const updatedUser = await updateProfile({ location_url: pickedLocationUrl.value.trim() })
+    userStore.userInfo = { ...userStore.userInfo, ...updatedUser }
+    hapticFeedback('success')
+    showSuccessToast(t('profile.updateSuccess'))
+    googleMapInstance = null; googleMapMarker = null
+    return true
+  } catch {
+    showToast(t('profile.updateFailed'))
+    return false
+  }
 }
 
 const sendPhoneCode = async () => {
@@ -660,15 +882,11 @@ const handleLogout = async () => {
 
 const currentLang = ref(getCurrentLanguage())
 
-// 加载客服和关于信息
+// 加载客服信息
 const loadContactAbout = async () => {
   try {
-    const [contact, about] = await Promise.all([
-      getPublicAnnouncements('contact'),
-      getPublicAnnouncements('about'),
-    ])
+    const contact = await getPublicAnnouncements('contact')
     contactInfo.value = contact
-    aboutInfo.value = about
   } catch {
     // 静默处理
   }
@@ -778,6 +996,51 @@ onActivated(() => {
 .map-link {
   color: #1989fa;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.map-picker-wrap {
+  padding: 0;
+}
+
+.map-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 4px;
+}
+
+.locate-btn {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.locate-btn:disabled {
+  background: #90bce8;
+  cursor: not-allowed;
+}
+
+.map-container {
+  width: 100%;
+  height: 260px;
+  background: #eee;
+}
+
+.map-url-field {
+  margin-top: 4px;
+}
+
+.map-picker-hint {
+  font-size: 12px;
+  color: #999;
+  padding: 4px 16px 8px;
 }
 
 .store-photo-cell {
@@ -790,6 +1053,51 @@ onActivated(() => {
   color: #ee0a24;
   font-size: 16px;
   cursor: pointer;
+}
+
+/* 我的地址 */
+.addr-summary-text {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.addr-summary-empty {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.addr-popup {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+}
+
+.addr-popup-title {
+  text-align: center;
+  padding: 16px 16px 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  border-bottom: 1px solid #f5f5f5;
+  flex-shrink: 0;
+}
+
+.addr-popup-body {
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 8px;
+}
+
+.map-set-text {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.addr-popup-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #f5f5f5;
+  flex-shrink: 0;
 }
 
 .telegram-hint {

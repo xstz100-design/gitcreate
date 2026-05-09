@@ -5,8 +5,8 @@
     </div>
     
     <div class="filters">
-      <el-row :gutter="10">
-        <el-col :xs="10" :sm="6">
+      <el-row :gutter="10" align="middle">
+        <el-col :xs="10" :sm="8" :md="6">
           <el-select v-model="filters.payment_status" :placeholder="$t('order.paymentStatus')" clearable style="width: 100%;">
             <el-option :label="$t('order.all')" value="" />
             <el-option :label="$t('order.unpaid')" value="unpaid" />
@@ -14,7 +14,7 @@
             <el-option :label="$t('order.monthly')" value="monthly" />
           </el-select>
         </el-col>
-        <el-col :xs="10" :sm="6">
+        <el-col :xs="10" :sm="8" :md="6">
           <el-select
             v-model="filters.delivery_status"
             :placeholder="$t('order.deliveryStatus')"
@@ -28,8 +28,8 @@
             <el-option :label="$t('order.cancelled')" value="cancelled" />
           </el-select>
         </el-col>
-        <el-col :xs="4" :sm="6">
-          <el-button type="primary" @click="loadOrders" :size="mobile ? 'small' : 'default'">{{ $t('common.query') }}</el-button>
+        <el-col :xs="4" :sm="4" :md="3">
+          <el-button type="primary" @click="loadOrders" :size="mobile ? 'small' : 'default'" style="width:100%;padding-left:0;padding-right:0">{{ $t('common.query') }}</el-button>
         </el-col>
       </el-row>
     </div>
@@ -319,7 +319,7 @@ const statusForm = reactive({
 
 const getPaymentStatusType = (status) => {
   const map = { unpaid: 'warning', cash: 'success', monthly: 'primary' }
-  return map[status] || ''
+  return map[(status || '').toLowerCase()] || ''
 }
 
 const getDeliveryStatusType = (status) => {
@@ -329,7 +329,7 @@ const getDeliveryStatusType = (status) => {
     delivered: 'success',
     cancelled: 'danger',
   }
-  return map[status] || ''
+  return map[(status || '').toLowerCase()] || ''
 }
 
 const loadOrders = async () => {
@@ -361,7 +361,15 @@ const handleUpdateStatus = (order) => {
 const submitStatusUpdate = async () => {
   submitting.value = true
   try {
-    await updateOrder(currentOrder.value.id, statusForm)
+    const payload = { ...statusForm }
+    // 空字符串的时间字段会让 Go 后端解析失败，转成 null
+    if (!payload.scheduled_at) {
+      payload.scheduled_at = null
+    } else {
+      // 补全为带时区的 ISO 字符串以匹配 Go RFC3339
+      payload.scheduled_at = new Date(payload.scheduled_at).toISOString()
+    }
+    await updateOrder(currentOrder.value.id, payload)
     ElMessage.success(t('order.statusUpdateSuccess'))
     statusVisible.value = false
     loadOrders()

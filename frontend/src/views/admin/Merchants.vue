@@ -1,10 +1,8 @@
 <template>
-  <div class="page-container merchants-page">
-    <div class="page-header page-header-modern">
-      <div class="header-main">
-        <h2>{{ $t('admin.merchants') }}</h2>
-      </div>
-      <div class="header-actions">
+  <div class="page-container">
+    <div class="page-header">
+      <h2>{{ $t('admin.merchants') }}</h2>
+      <div class="header-btns">
         <el-button type="primary" @click="handleAdd('merchant')" :size="mobile ? 'small' : 'default'">
           <el-icon><plus /></el-icon>
           {{ $t('admin.addMerchant') }}
@@ -16,40 +14,54 @@
       </div>
     </div>
 
-    <div class="overview-grid">
-      <div class="overview-card accent-blue">
-        <div class="overview-label">{{ $t('admin.totalUsers') }}</div>
-        <div class="overview-value">{{ merchants.length }}</div>
-      </div>
-      <div class="overview-card accent-red">
-        <div class="overview-label">{{ $t('admin.adminUsers') }}</div>
-        <div class="overview-value">{{ adminCount }}</div>
-      </div>
-      <div class="overview-card accent-green">
-        <div class="overview-label">{{ $t('admin.merchantUsers') }}</div>
-        <div class="overview-value">{{ merchantCount }}</div>
-      </div>
-      <div class="overview-card accent-orange">
-        <div class="overview-label">{{ $t('admin.pendingApprovals') }}</div>
-        <div class="overview-value">{{ pendingCount }}</div>
-      </div>
-    </div>
-
-    <div class="content-card user-manage-card">
-      <div class="table-toolbar">
-        <div class="filter-group">
-          <el-radio-group v-model="approvalFilter" size="small">
-            <el-radio-button value="all">{{ $t('admin.allRegistrations') }}</el-radio-button>
-            <el-radio-button value="pending">
-              {{ $t('admin.statusPending') }}
-              <span v-if="pendingCount > 0" class="count-badge">{{ pendingCount }}</span>
-            </el-radio-button>
-            <el-radio-button value="approved">{{ $t('admin.statusApproved') }}</el-radio-button>
-            <el-radio-button value="rejected">{{ $t('admin.statusRejected') }}</el-radio-button>
-          </el-radio-group>
+    <el-row :gutter="mobile ? 10 : 24" class="mb-lg">
+      <el-col :xs="12" :sm="12" :md="6">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #2563EB">
+            <el-icon :size="mobile ? 18 : 24"><User /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ merchants.length }}</div>
+            <div class="stat-label">{{ $t('admin.totalUsers') }}</div>
+          </div>
         </div>
-        <div class="toolbar-meta">{{ $t('admin.filteredResult', { count: filteredUsers.length }) }}</div>
-      </div>
+      </el-col>
+      <el-col :xs="12" :sm="12" :md="6">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #DC2626">
+            <el-icon :size="mobile ? 18 : 24"><Avatar /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ adminCount }}</div>
+            <div class="stat-label">{{ $t('admin.adminUsers') }}</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="12" :md="6">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #16A34A">
+            <el-icon :size="mobile ? 18 : 24"><Shop /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ merchantCount }}</div>
+            <div class="stat-label">{{ $t('admin.merchantUsers') }}</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :xs="12" :sm="12" :md="6">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #0891B2">
+            <el-icon :size="mobile ? 18 : 24"><CircleCheck /></el-icon>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">{{ activeCount }}</div>
+            <div class="stat-label">{{ $t('admin.activeUsers') }}</div>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+
+    <div class="content-card">
 
       <el-table v-if="!mobile" v-loading="loading" :data="filteredUsers" stripe class="modern-user-table">
         <el-table-column :label="$t('admin.userInfoColumn')" min-width="270">
@@ -95,22 +107,18 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="$t('admin.accountStateColumn')" min-width="180">
+        <el-table-column :label="$t('admin.accountStateColumn')" min-width="120">
           <template #default="{ row }">
             <div class="status-stack">
               <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? $t('common.enabled') : $t('common.disabled') }}</el-tag>
-              <el-tag v-if="row.role === 'merchant'" :type="getApprovalType(row.approval_status)" size="small">{{ getApprovalText(row.approval_status) }}</el-tag>
-              <span v-if="row.role === 'merchant' && row.rejected_reason" class="inline-danger">{{ row.rejected_reason }}</span>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column :label="$t('common.operation')" width="320" fixed="right">
+        <el-table-column :label="$t('common.operation')" width="240" fixed="right">
           <template #default="{ row }">
             <div class="action-group action-chip-group">
               <el-button v-if="canEditRow(row)" type="primary" plain size="small" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
-              <el-button v-if="row.role === 'merchant' && row.approval_status !== 'approved'" type="success" plain size="small" @click="handleApprove(row)">{{ $t('admin.approve') }}</el-button>
-              <el-button v-if="row.role === 'merchant' && row.approval_status !== 'approved'" type="danger" plain size="small" @click="handleReject(row)">{{ $t('admin.reject') }}</el-button>
               <el-button
                 v-if="canManageSuperAdminRow(row)"
                 :type="row.is_super_admin ? 'warning' : 'success'"
@@ -118,7 +126,6 @@
                 size="small"
                 @click="handleToggleSuperAdmin(row, !row.is_super_admin)"
               >{{ row.is_super_admin ? $t('admin.demoteSuperAdmin') : $t('admin.promoteSuperAdmin') }}</el-button>
-              <el-button v-if="canResetPasswordRow(row)" type="warning" plain size="small" @click="handleResetPassword(row)">{{ $t('admin.resetPassword') }}</el-button>
               <el-button v-if="canDeleteRow(row)" type="danger" plain size="small" @click="handleDeleteUser(row)">{{ $t('common.delete') }}</el-button>
               <el-switch
                 v-if="canToggleActive(row)"
@@ -133,31 +140,29 @@
 
       <div v-else v-loading="loading" class="mobile-card-list">
         <div v-for="row in filteredUsers" :key="row.id" class="user-card modern-user-card" @click="handleEdit(row)">
-          <div class="card-top card-top-modern">
-            <div class="card-user-info card-user-info-modern">
-              <div class="card-user-meta">
-                <span class="card-username">{{ row.full_name || row.username }}</span>
-                <span class="card-account">#{{ row.id }} · {{ row.username }}</span>
-              </div>
-              <div class="card-tags">
-                <el-tag :type="getRoleType(row.role)" size="small">{{ getRoleText(row.role) }}</el-tag>
-                <el-tag v-if="row.is_super_admin" type="warning" size="small">{{ $t('admin.superAdmin') }}</el-tag>
-                <el-tag v-if="row.role === 'merchant'" :type="getApprovalType(row.approval_status)" size="small">{{ getApprovalText(row.approval_status) }}</el-tag>
+          <div class="card-top-v2">
+            <div class="card-meta-v2">
+              <div class="card-name-v2">{{ row.full_name || row.username }}</div>
+              <div class="card-sub-v2">
+                <span v-if="row.phone" class="card-phone">{{ row.phone }}</span>
+                <span v-else-if="row.username" class="card-phone">{{ row.username }}</span>
+                <span v-if="row.telegram_id" class="card-tg-id">· TG: {{ row.telegram_id }}</span>
               </div>
             </div>
             <el-switch
               v-if="canToggleActive(row)"
               :model-value="row.is_active"
-              size="small"
               @change="(val) => handleToggleActive(row, val)"
               @click.stop
             />
           </div>
-
-          <div class="card-footer card-footer-wrap action-chip-group">
+          <div class="card-tags-v2">
+            <el-tag :type="getRoleType(row.role)" size="small">{{ getRoleText(row.role) }}</el-tag>
+            <el-tag v-if="row.is_super_admin" type="warning" size="small">{{ $t('admin.superAdmin') }}</el-tag>
+            <el-tag v-if="canToggleActive(row) && !row.is_active" type="info" size="small">{{ $t('common.disabled') }}</el-tag>
+          </div>
+          <div class="card-actions-v2">
             <el-button v-if="canEditRow(row)" type="primary" plain size="small" @click.stop="handleEdit(row)">{{ $t('common.edit') }}</el-button>
-            <el-button v-if="row.role === 'merchant' && row.approval_status !== 'approved'" type="success" plain size="small" @click.stop="handleApprove(row)">{{ $t('admin.approve') }}</el-button>
-            <el-button v-if="row.role === 'merchant' && row.approval_status !== 'approved'" type="danger" plain size="small" @click.stop="handleReject(row)">{{ $t('admin.reject') }}</el-button>
             <el-button
               v-if="canManageSuperAdminRow(row)"
               :type="row.is_super_admin ? 'warning' : 'success'"
@@ -165,11 +170,10 @@
               size="small"
               @click.stop="handleToggleSuperAdmin(row, !row.is_super_admin)"
             >{{ row.is_super_admin ? $t('admin.demoteSuperAdmin') : $t('admin.promoteSuperAdmin') }}</el-button>
-            <el-button v-if="canResetPasswordRow(row)" type="warning" plain size="small" @click.stop="handleResetPassword(row)">{{ $t('admin.resetPassword') }}</el-button>
             <el-button v-if="canDeleteRow(row)" type="danger" plain size="small" @click.stop="handleDeleteUser(row)">{{ $t('common.delete') }}</el-button>
           </div>
         </div>
-        <el-empty v-if="!loading && merchants.length === 0" />
+        <el-empty v-if="!loading && filteredUsers.length === 0" />
       </div>
     </div>
 
@@ -214,11 +218,14 @@
           <el-input v-model="form.address" type="textarea" :rows="2" />
         </el-form-item>
         <el-form-item :label="$t('profile.locationUrl')" prop="location_url">
-          <el-input v-model="form.location_url" :placeholder="$t('profile.locationUrlPlaceholder')">
-            <template #append v-if="form.location_url">
-              <a :href="form.location_url" target="_blank" style="color: #409eff; text-decoration: none;">{{ $t('profile.viewMap') }}</a>
-            </template>
-          </el-input>
+          <div style="display:flex;gap:8px;align-items:center;width:100%">
+            <el-input v-model="form.location_url" :placeholder="$t('profile.locationUrlPlaceholder')" style="flex:1">
+              <template #append v-if="form.location_url">
+                <a :href="form.location_url" target="_blank" style="color: #409eff; text-decoration: none;">{{ $t('profile.viewMap') }}</a>
+              </template>
+            </el-input>
+            <el-button size="small" @click="openAdminMapPicker">📍 {{ $t('profile.pickLocation') }}</el-button>
+          </div>
         </el-form-item>
         <el-form-item v-if="form.role === 'merchant'" :label="$t('admin.allowMonthlyBilling')">
           <el-switch v-model="form.allow_credit" />
@@ -250,7 +257,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="newAccountVisible" :title="$t('admin.userAdded')" width="380px" center :close-on-click-modal="false">
+    <el-dialog v-model="newAccountVisible" :title="$t('admin.userAdded')" :width="mobile ? '92vw' : '380px'" center :close-on-click-modal="false">
       <div class="new-account-info">
         <p class="account-tip">{{ $t('admin.userCreatedTip') }}</p>
         <div class="account-box">
@@ -263,21 +270,126 @@
         <el-button type="primary" @click="newAccountVisible = false">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- 地图选点对话框 -->
+    <el-dialog v-model="showAdminMapPicker" :title="$t('profile.pickLocation')" :width="mobile ? '94vw' : '560px'" :fullscreen="false" destroy-on-close :close-on-click-modal="false">
+      <div class="map-picker-wrap">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <el-button size="small" type="primary" :loading="adminLocating" @click="adminLocateMe">
+            📍 {{ adminLocating ? $t('profile.locating') : $t('profile.locateMe') }}
+          </el-button>
+        </div>
+        <div ref="adminMapContainerRef" style="width:100%;height:320px;background:#eee;border-radius:6px"></div>
+        <el-input v-model="adminPickedUrl" :placeholder="$t('profile.locationUrlPlaceholder')" clearable style="margin-top:10px" />
+        <div style="font-size:12px;color:#999;margin-top:6px">{{ $t('profile.locationPickerHint') }}</div>
+      </div>
+      <template #footer>
+        <el-button @click="showAdminMapPicker = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmAdminMapPick">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, InfoFilled, User, Avatar, Shop, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
-import { getUserList, register, updateUser, resetUserPassword, deleteUser, approveUser, setUserSuperAdmin } from '@/api'
+import { getUserList, register, updateUser, deleteUser, approveUser, setUserSuperAdmin } from '@/api'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { getRoleText } from '@/utils/format'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const isSuperAdmin = computed(() => userStore.isSuperAdmin)
+
+// ──────────────── 地图选点 ────────────────
+const GMAP_KEY = 'AIzaSyBLMXrpizbEE4f36sUCerOasHVWM8Doumc'
+const showAdminMapPicker = ref(false)
+const adminPickedUrl = ref('')
+const adminLocating = ref(false)
+const adminMapContainerRef = ref(null)
+let adminMapInstance = null
+let adminMapMarker = null
+
+const loadGMapScript = () => {
+  if (document.getElementById('google-maps-script')) {
+    return window.google?.maps ? Promise.resolve() : new Promise(r => { const t = setInterval(() => { if (window.google?.maps) { clearInterval(t); r() } }, 100) })
+  }
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.id = 'google-maps-script'
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAP_KEY}&language=zh-CN`
+    s.async = true; s.defer = true; s.onload = resolve; s.onerror = reject
+    document.head.appendChild(s)
+  })
+}
+
+const placeAdminMarker = (latlng) => {
+  if (!adminMapInstance) return
+  if (adminMapMarker) adminMapMarker.setMap(null)
+  adminMapMarker = new window.google.maps.Marker({ position: latlng, map: adminMapInstance })
+  adminMapInstance.panTo(latlng)
+  const lat = (typeof latlng.lat === 'function' ? latlng.lat() : latlng.lat).toFixed(6)
+  const lng = (typeof latlng.lng === 'function' ? latlng.lng() : latlng.lng).toFixed(6)
+  adminPickedUrl.value = `https://maps.google.com/?q=${lat},${lng}`
+}
+
+const adminLocateMe = () => {
+  if (!navigator.geolocation) { ElMessage.warning('浏览器不支持定位'); return }
+  adminLocating.value = true
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      adminLocating.value = false
+      const ll = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      if (adminMapInstance) { adminMapInstance.setCenter(ll); adminMapInstance.setZoom(17); placeAdminMarker(ll) }
+    },
+    () => { adminLocating.value = false; ElMessage.warning('无法定位') },
+    { enableHighAccuracy: true, timeout: 10000 }
+  )
+}
+
+const openAdminMapPicker = async () => {
+  adminPickedUrl.value = form.location_url || ''
+  showAdminMapPicker.value = true
+  await nextTick()
+  try {
+    await loadGMapScript()
+    await nextTick()
+    const container = adminMapContainerRef.value
+    if (!container || !window.google?.maps) return
+    const defaultCenter = { lat: 11.5564, lng: 104.9282 }
+    let initCenter = defaultCenter
+    const existing = adminPickedUrl.value
+    if (existing) {
+      const m = existing.match(/[?&]q=([\-\d.]+),([\-\d.]+)/) || existing.match(/@([\-\d.]+),([\-\d.]+)/)
+      if (m) initCenter = { lat: parseFloat(m[1]), lng: parseFloat(m[2]) }
+    }
+    adminMapInstance = new window.google.maps.Map(container, {
+      center: initCenter, zoom: 15,
+      mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+      gestureHandling: 'greedy',
+    })
+    if (existing && initCenter !== defaultCenter) {
+      adminMapMarker = new window.google.maps.Marker({ position: initCenter, map: adminMapInstance })
+    } else if (!existing && navigator.geolocation) {
+      adminLocating.value = true
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { adminLocating.value = false; adminMapInstance?.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }); adminMapInstance?.setZoom(17) },
+        () => { adminLocating.value = false }, { enableHighAccuracy: true, timeout: 8000 }
+      )
+    }
+    adminMapInstance.addListener('click', (e) => placeAdminMarker(e.latLng))
+  } catch { ElMessage.warning('地图加载失败') }
+}
+
+const confirmAdminMapPick = () => {
+  form.location_url = adminPickedUrl.value
+  showAdminMapPicker.value = false
+  adminMapInstance = null; adminMapMarker = null
+}
+// ───────────────────────────────────────────────
 
 const { t } = useI18n()
 
@@ -288,7 +400,6 @@ onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => window.removeEventListener('resize', onResize))
 const loading = ref(false)
 const merchants = ref([])
-const approvalFilter = ref('all')
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
@@ -353,33 +464,25 @@ const canEditRow = (row) => row.role !== 'admin' || isSuperAdmin.value || row.id
 
 const canToggleActive = (row) => !isProtectedUser(row) && (row.role !== 'admin' || isSuperAdmin.value)
 
-const canResetPasswordRow = (row) => isSuperAdmin.value && !isProtectedUser(row)
-
 const canDeleteRow = (row) => isSuperAdmin.value && !isProtectedUser(row)
 
 const canManageSuperAdminRow = (row) => isSuperAdmin.value && row.role === 'admin' && row.id !== userStore.userInfo?.id
 
-const pendingCount = computed(() => {
-  return merchants.value.filter((row) => row.role === 'merchant' && row.approval_status === 'pending').length
-})
+const pendingCount = computed(() => merchants.value.filter((row) => row.role === 'merchant' && row.approval_status === 'pending').length)
 
 const adminCount = computed(() => merchants.value.filter((row) => row.role === 'admin').length)
 
 const merchantCount = computed(() => merchants.value.filter((row) => row.role === 'merchant').length)
 
+const activeCount = computed(() => merchants.value.filter((row) => row.is_active).length)
+
+const searchKeyword = ref('')
+
+const filteredUsers = computed(() => merchants.value)
+
 const dialogTitle = computed(() => {
   const roleText = form.role === 'admin' ? t('role.admin') : t('role.merchant')
   return isEdit.value ? t('admin.editUserWithRole', { role: roleText }) : t('admin.addUserWithRole', { role: roleText })
-})
-
-const filteredUsers = computed(() => {
-  if (approvalFilter.value === 'all') {
-    return merchants.value
-  }
-
-  return merchants.value.filter((row) => {
-    return row.role === 'merchant' && row.approval_status === approvalFilter.value
-  })
 })
 
 const getBillingText = (row) => {
@@ -473,42 +576,6 @@ const onDialogOpen = () => {
   }, 50)
 }
 
-const handleApprove = async (row) => {
-  try {
-    await ElMessageBox.confirm(
-      t('admin.approveConfirm', { name: row.full_name || row.username }),
-      t('admin.hint'),
-      { confirmButtonText: t('admin.approve'), cancelButtonText: t('common.cancel'), type: 'success' }
-    )
-    await approveUser(row.id, true)
-    ElMessage.success(t('admin.userApproved'))
-    loadMerchants()
-  } catch {
-    // 用户取消
-  }
-}
-
-const handleReject = async (row) => {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      t('admin.rejectReasonPlaceholder'),
-      t('admin.reject'),
-      {
-        confirmButtonText: t('admin.reject'),
-        cancelButtonText: t('common.cancel'),
-        inputValue: row.rejected_reason || '',
-        inputPattern: /\S+/,
-        inputErrorMessage: t('admin.rejectReasonRequired'),
-      }
-    )
-    await approveUser(row.id, false, value)
-    ElMessage.success(t('admin.userRejected'))
-    loadMerchants()
-  } catch {
-    // 用户取消
-  }
-}
-
 const handleSubmit = async () => {
   if (!formRef.value) {
     ElMessage.error('表单未初始化，请重新打开')
@@ -569,32 +636,6 @@ onMounted(() => {
   loadMerchants()
 })
 
-// 重置密码 - 二次确认
-const handleResetPassword = async (row) => {
-  try {
-    // 第一次确认
-    await ElMessageBox.confirm(
-      t('admin.resetPasswordConfirm', { name: row.full_name || row.username }),
-      t('admin.hint'),
-      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
-    )
-    // 第二次确认 - 避免误触
-    await ElMessageBox.confirm(
-      t('admin.resetPasswordDoubleConfirm', { name: row.full_name || row.username }),
-      t('admin.hint'),
-      { confirmButtonText: t('admin.confirmReset'), cancelButtonText: t('common.cancel'), type: 'error', confirmButtonClass: 'el-button--danger' }
-    )
-    const res = await resetUserPassword(row.id)
-    await ElMessageBox.alert(
-      `${t('admin.temporaryPassword')}: ${res.temporary_password}`,
-      t('admin.passwordResetSuccess'),
-      { confirmButtonText: t('common.confirm') }
-    )
-  } catch {
-    // 用户取消
-  }
-}
-
 const handleToggleSuperAdmin = async (row, enabled) => {
   try {
     await ElMessageBox.confirm(
@@ -634,106 +675,49 @@ const handleDeleteUser = async (row) => {
 </script>
 
 <style scoped>
-.merchants-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.page-header-modern {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.page-header h2 {
-  margin: 0;
-}
-
-.header-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.overview-card {
-  position: relative;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 14px 14px 12px;
-  overflow: hidden;
-}
-
-.overview-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: #1d4ed8;
-}
-
-.overview-card.accent-red::before {
-  background: #dc2626;
-}
-
-.overview-card.accent-green::before {
-  background: #16a34a;
-}
-
-.overview-card.accent-orange::before {
-  background: #ea580c;
-}
-
-.overview-label {
-  color: #6b7280;
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-
-.overview-value {
-  color: #111827;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.user-manage-card {
-  padding: 18px;
-}
-
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-}
-
-.toolbar-meta {
-  color: #6b7280;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.header-actions {
+.header-btns {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.card-detail-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.card-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.detail-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-val {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.text-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .modern-user-table {
@@ -902,6 +886,74 @@ const handleDeleteUser = async (row) => {
   transform: scale(0.995);
 }
 
+/* ====== 新版紧凑卡片 ====== */
+.user-card {
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
+  border-radius: 12px;
+  padding: 10px 12px 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.user-card:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05);
+}
+.card-top-v2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.card-meta-v2 {
+  min-width: 0;
+  flex: 1;
+}
+.card-name-v2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.card-sub-v2 {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.card-phone {
+  font-size: 13px;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.card-tg-id {
+  font-size: 11px;
+  color: #9ca3af;
+}
+.card-tags-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.card-actions-v2 {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.card-actions-v2 :deep(.el-button) {
+  padding: 4px 12px;
+  height: 28px;
+  font-size: 12px;
+}
+
 .card-top {
   display: flex;
   justify-content: space-between;
@@ -1058,54 +1110,15 @@ const handleDeleteUser = async (row) => {
 
 /* ========== 移动端适配 ========== */
 @media (max-width: 767px) {
-  .merchants-page {
-    padding: 12px;
-    gap: 10px;
+  .stat-card {
+    margin-bottom: 10px;
   }
 
-  .page-header h2 {
-    font-size: 18px;
-    margin: 0;
-  }
-
-  .filter-group {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .table-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .toolbar-meta {
-    white-space: normal;
-  }
-
-  .overview-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .overview-card {
-    padding: 10px 10px 9px;
-    border-radius: 12px;
-  }
-
-  .overview-label {
-    font-size: 11px;
-    margin-bottom: 4px;
-  }
-
-  .overview-value {
-    font-size: 20px;
-  }
-
-  .header-actions {
+  .header-btns {
     width: 100%;
   }
 
-  .header-actions :deep(.el-button) {
+  .header-btns :deep(.el-button) {
     flex: 1;
     min-width: 0;
   }

@@ -14,6 +14,7 @@ import (
 type TelegramUpdate struct {
 	UpdateID      int64                  `json:"update_id"`
 	CallbackQuery *TelegramCallbackQuery `json:"callback_query"`
+	Message       *TelegramIncomingMsg   `json:"message"`
 }
 
 type TelegramCallbackQuery struct {
@@ -26,8 +27,24 @@ type TelegramMessage struct {
 	Chat *TelegramChat `json:"chat"`
 }
 
+type TelegramIncomingMsg struct {
+	MessageID int64         `json:"message_id"`
+	From      *TelegramUser `json:"from"`
+	Chat      *TelegramChat `json:"chat"`
+	Text      string        `json:"text"`
+}
+
+type TelegramUser struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+}
+
 type TelegramChat struct {
-	ID int64 `json:"id"`
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Type      string `json:"type"`
 }
 
 type getUpdatesResponse struct {
@@ -82,12 +99,29 @@ func StartPolling(botToken string, stopCh <-chan struct{}) {
 				}
 				services.HandleBotCallback(database.DB, updateMap)
 			}
+			if upd.Message != nil && upd.Message.Chat != nil {
+				chat := upd.Message.Chat
+				title := chat.Title
+				if title == "" {
+					title = chat.FirstName
+					if chat.LastName != "" {
+						title += " " + chat.LastName
+					}
+				}
+				services.UpsertRecentChat(chat.ID, title, chat.Type)
+				fmt.Printf("[bot] 收到消息: chat_id=%d type=%s title=%q\n", chat.ID, chat.Type, title)
+
+				// 私聊消息：处理 /start 及账号关联引导
+				if chat.Type == "private" && upd.Message.From != nil {
+					services.HandlePrivateMessage(database.DB, upd.Message.From.ID, upd.Message.Text)
+				}
+			}
 		}
 	}
 }
 
 func fetchUpdates(client *http.Client, token string, offset int64) ([]TelegramUpdate, error) {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?timeout=20&allowed_updates=[\"callback_query\"]&offset=%d",
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?timeout=20&allowed_updates=[%%22callback_query%%22,%%22message%%22]&offset=%d",
 		token, offset)
 
 	resp, err := client.Get(url) //nolint:gosec

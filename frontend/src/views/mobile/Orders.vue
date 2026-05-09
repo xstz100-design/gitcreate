@@ -162,6 +162,15 @@
               {{ $t('order.cancelOrder') }}
             </van-button>
           </div>
+
+          <!-- 联系客服（送货中/已送达时） -->
+          <div v-if="showContactBtn(currentOrder) && contactPhone" class="contact-section">
+            <a :href="'tel:' + contactPhone" class="contact-btn-link">
+              <van-button type="primary" plain round block icon="phone-o">
+                联系客服 / ទំនាក់ទំនង {{ contactPhone }}
+              </van-button>
+            </a>
+          </div>
         </div>
       </div>
     </van-popup>
@@ -169,10 +178,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showDialog } from 'vant'
-import { getOrders, cancelOrder } from '@/api'
+import { getOrders, cancelOrder, getContactInfo } from '@/api'
 import {
   formatUSD,
   formatKHR,
@@ -193,6 +202,21 @@ const refreshing = ref(false)
 const showDetail = ref(false)
 const currentOrder = ref(null)
 const cancelling = ref(false)
+const contactPhone = ref('')
+
+// 加载客服电话
+const loadContactPhone = async () => {
+  try {
+    const info = await getContactInfo()
+    contactPhone.value = info.phone || ''
+  } catch {
+    // 静默处理
+  }
+}
+
+onMounted(() => {
+  loadContactPhone()
+})
 
 // 根据Tab筛选订单
 const filteredOrders = computed(() => {
@@ -210,7 +234,7 @@ const getDeliveryStatusType = (status) => {
     delivered: 'success',
     cancelled: 'danger',
   }
-  return map[status] || 'default'
+  return map[(status || '').toLowerCase()] || 'default'
 }
 
 // 支付状态类型
@@ -220,7 +244,7 @@ const getPaymentStatusType = (status) => {
     cash: 'success',
     monthly: 'primary',
   }
-  return map[status] || 'default'
+  return map[(status || '').toLowerCase()] || 'default'
 }
 
 // 加载订单
@@ -259,10 +283,14 @@ const showOrderDetail = (order) => {
   showDetail.value = true
 }
 
-// 判断订单是否可取消
+// 判断订单是否可取消（仅待配送状态可取消）
 const canCancel = (order) => {
-  return order.delivery_status !== 'delivered' &&
-    order.delivery_status !== 'cancelled'
+  return order.delivery_status === 'pending'
+}
+
+// 判断是否显示联系客服按钮（送货中或已送达不可取消时）
+const showContactBtn = (order) => {
+  return order.delivery_status === 'delivering' || order.delivery_status === 'delivered'
 }
 
 // 取消订单
@@ -513,5 +541,14 @@ const handleCancel = async (order) => {
 
 .cancel-section {
   padding: 16px;
+}
+
+.contact-section {
+  padding: 8px 16px 16px;
+}
+
+.contact-btn-link {
+  text-decoration: none;
+  display: block;
 }
 </style>

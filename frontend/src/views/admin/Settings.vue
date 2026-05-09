@@ -21,9 +21,9 @@
         label-width="160px"
         label-position="left"
       >
-        <el-form-item :label="$t('settings.pickerChatId')">
+        <el-form-item :label="$t('settings.groupChatId')">
           <el-input
-            v-model="rolesForm.picker_chat_id"
+            v-model="rolesForm.group_chat_id"
             :placeholder="$t('settings.chatIdPlaceholder')"
             clearable
             style="max-width: 300px;"
@@ -32,26 +32,24 @@
             link
             type="primary"
             style="margin-left: 8px;"
-            @click="openChatPicker('picker')"
+            @click="openChatPicker"
           >
             {{ $t('settings.detectChat') }}
           </el-button>
         </el-form-item>
-        <el-form-item :label="$t('settings.deliveryChatId')">
+        <el-form-item :label="$t('settings.deliveryGroupLink')">
           <el-input
-            v-model="rolesForm.delivery_chat_id"
-            :placeholder="$t('settings.chatIdPlaceholder')"
+            v-model="rolesForm.delivery_group_link"
+            placeholder="https://t.me/+..."
             clearable
             style="max-width: 300px;"
           />
-          <el-button
-            link
-            type="primary"
-            style="margin-left: 8px;"
-            @click="openChatPicker('delivery')"
-          >
-            {{ $t('settings.detectChat') }}
-          </el-button>
+          <a
+            v-if="rolesForm.delivery_group_link"
+            :href="rolesForm.delivery_group_link"
+            target="_blank"
+            style="margin-left:8px;color:#409eff;font-size:13px;"
+          >{{ $t('settings.openGroup') }}</a>
         </el-form-item>
         <el-form-item>
           <el-button
@@ -105,6 +103,70 @@
       </el-form>
     </el-card>
 
+    <!-- Google Maps 配置 -->
+    <el-card class="setting-card" shadow="never">
+      <template #header>
+        <span>{{ $t('settings.googleMaps') }}</span>
+      </template>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        :title="$t('settings.googleMapsTip')"
+        style="margin-bottom: 16px;"
+      />
+      <el-form
+        v-loading="loadingMaps"
+        :model="mapsForm"
+        label-width="160px"
+        label-position="left"
+      >
+        <el-form-item :label="$t('settings.googleMapsKey')">
+          <el-input
+            v-model="mapsForm.api_key"
+            :placeholder="$t('settings.googleMapsKeyPlaceholder')"
+            clearable
+            show-password
+            style="max-width: 420px;"
+          />
+        </el-form-item>
+        <el-form-item :label="$t('settings.warehouseLocation')">
+          <div style="width:100%;max-width:520px;">
+            <div v-if="!mapsForm.api_key" style="color:#999;font-size:13px;padding:8px 0;">
+              {{ $t('settings.warehouseLocationNeedKey') }}
+            </div>
+            <template v-else>
+              <div
+                ref="mapPickerEl"
+                style="width:100%;height:280px;border:1px solid #dcdfe6;border-radius:6px;margin-bottom:8px;"
+              />
+              <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                <span v-if="mapsForm.warehouse_lat && mapsForm.warehouse_lng" style="color:#555;">
+                  {{ mapsForm.warehouse_lat }}, {{ mapsForm.warehouse_lng }}
+                </span>
+                <span v-else style="color:#999;">{{ $t('settings.warehouseLocationTip') }}</span>
+                <a
+                  v-if="mapsForm.warehouse_lat && mapsForm.warehouse_lng"
+                  :href="`https://maps.google.com/?q=${mapsForm.warehouse_lat},${mapsForm.warehouse_lng}`"
+                  target="_blank"
+                  style="color:#409eff;text-decoration:none;"
+                >{{ $t('profile.viewMap') }}</a>
+              </div>
+            </template>
+          </div>
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            :loading="savingMaps"
+            @click="saveMaps"
+          >
+            {{ $t('common.save') }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- 联系方式设置 -->
     <el-card class="setting-card" shadow="never">
       <template #header>
@@ -136,6 +198,14 @@
           <el-input
             v-model="contactForm.telegram"
             placeholder="@username"
+            clearable
+            style="max-width: 300px;"
+          />
+        </el-form-item>
+        <el-form-item :label="$t('settings.contactWechat')">
+          <el-input
+            v-model="contactForm.wechat"
+            placeholder="WeChat ID"
             clearable
             style="max-width: 300px;"
           />
@@ -204,7 +274,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import {
@@ -215,13 +285,15 @@ import {
   getTelegramRecentChats,
   getContactInfo,
   updateContactInfo,
+  getGoogleMapsSettings,
+  updateGoogleMapsSettings,
 } from '@/api'
 
 const { t } = useI18n()
 
 const loadingRoles = ref(false)
 const savingRoles = ref(false)
-const rolesForm = ref({ picker_chat_id: '', delivery_chat_id: '' })
+const rolesForm = ref({ group_chat_id: '', delivery_group_link: '' })
 
 const loadingFee = ref(false)
 const savingFee = ref(false)
@@ -231,7 +303,6 @@ const feeForm = ref({ free_distance_km: 3, fee_per_extra_km_usd: 0.5 })
 const chatPickerVisible = ref(false)
 const loadingChats = ref(false)
 const chats = ref([])
-const pickerTarget = ref('picker') // 'picker' | 'delivery'
 
 function chatTagType(t) {
   if (t === 'private') return 'info'
@@ -240,8 +311,7 @@ function chatTagType(t) {
   return ''
 }
 
-function openChatPicker(target) {
-  pickerTarget.value = target
+function openChatPicker() {
   chatPickerVisible.value = true
   if (chats.value.length === 0) loadChats()
 }
@@ -259,11 +329,7 @@ async function loadChats() {
 }
 
 function selectChat(c) {
-  if (pickerTarget.value === 'picker') {
-    rolesForm.value.picker_chat_id = c.id
-  } else {
-    rolesForm.value.delivery_chat_id = c.id
-  }
+  rolesForm.value.group_chat_id = c.id
   chatPickerVisible.value = false
   ElMessage.success(t('settings.chatSelected') || 'Selected')
 }
@@ -273,8 +339,8 @@ async function loadRoles() {
   try {
     const data = await getRoleChatIds()
     rolesForm.value = {
-      picker_chat_id: data.picker_chat_id || '',
-      delivery_chat_id: data.delivery_chat_id || '',
+      group_chat_id: data.group_chat_id || '',
+      delivery_group_link: data.delivery_group_link || '',
     }
   } catch (e) {
     ElMessage.error(e?.message || 'Load failed')
@@ -287,12 +353,12 @@ async function saveRoles() {
   savingRoles.value = true
   try {
     const data = await updateRoleChatIds({
-      picker_chat_id: rolesForm.value.picker_chat_id || '',
-      delivery_chat_id: rolesForm.value.delivery_chat_id || '',
+      group_chat_id: rolesForm.value.group_chat_id || '',
+      delivery_group_link: rolesForm.value.delivery_group_link || '',
     })
     rolesForm.value = {
-      picker_chat_id: data.picker_chat_id || '',
-      delivery_chat_id: data.delivery_chat_id || '',
+      group_chat_id: data.group_chat_id || '',
+      delivery_group_link: data.delivery_group_link || '',
     }
     ElMessage.success(t('common.saveSuccess') || 'Saved')
   } catch (e) {
@@ -340,17 +406,103 @@ onMounted(() => {
   loadRoles()
   loadFee()
   loadContact()
+  loadMaps()
 })
+
+const loadingMaps = ref(false)
+const savingMaps = ref(false)
+const mapsForm = ref({ api_key: '', warehouse_lat: '', warehouse_lng: '' })
+
+// ─── Google Maps 交互地图选点 ───
+const mapPickerEl = ref(null)
+let _googleMap = null
+let _warehouseMarker = null
+
+async function initMapPicker() {
+  await nextTick()
+  if (!mapPickerEl.value || !mapsForm.value.api_key) return
+  if (!window.google?.maps) {
+    await new Promise((resolve, reject) => {
+      if (document.querySelector('#gmap-script')) { resolve(); return }
+      const s = document.createElement('script')
+      s.id = 'gmap-script'
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${mapsForm.value.api_key}`
+      s.onload = resolve
+      s.onerror = reject
+      document.head.appendChild(s)
+    })
+  }
+  const lat = parseFloat(mapsForm.value.warehouse_lat) || 11.5564
+  const lng = parseFloat(mapsForm.value.warehouse_lng) || 104.9282
+  _googleMap = new window.google.maps.Map(mapPickerEl.value, {
+    center: { lat, lng },
+    zoom: mapsForm.value.warehouse_lat ? 16 : 13,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+  })
+  if (mapsForm.value.warehouse_lat && mapsForm.value.warehouse_lng) {
+    _warehouseMarker = new window.google.maps.Marker({ position: { lat, lng }, map: _googleMap })
+  }
+  _googleMap.addListener('click', (e) => {
+    const newLat = e.latLng.lat().toFixed(6)
+    const newLng = e.latLng.lng().toFixed(6)
+    mapsForm.value.warehouse_lat = newLat
+    mapsForm.value.warehouse_lng = newLng
+    const pos = { lat: parseFloat(newLat), lng: parseFloat(newLng) }
+    if (_warehouseMarker) {
+      _warehouseMarker.setPosition(pos)
+    } else {
+      _warehouseMarker = new window.google.maps.Marker({ position: pos, map: _googleMap })
+    }
+  })
+}
+
+// 当 api_key 填写完成且容器已渲染后初始化地图
+watch(() => mapsForm.value.api_key, (val) => {
+  if (val) initMapPicker()
+})
+
+async function loadMaps() {
+  loadingMaps.value = true
+  try {
+    const data = await getGoogleMapsSettings()
+    mapsForm.value = {
+      api_key: data.api_key || '',
+      warehouse_lat: data.warehouse_lat || '',
+      warehouse_lng: data.warehouse_lng || '',
+    }
+    if (mapsForm.value.api_key) {
+      initMapPicker()
+    }
+  } catch (e) {
+    ElMessage.error(e?.message || 'Load failed')
+  } finally {
+    loadingMaps.value = false
+  }
+}
+
+async function saveMaps() {
+  savingMaps.value = true
+  try {
+    await updateGoogleMapsSettings(mapsForm.value)
+    ElMessage.success(t('common.saveSuccess') || 'Saved')
+  } catch (e) {
+    ElMessage.error(e?.message || 'Save failed')
+  } finally {
+    savingMaps.value = false
+  }
+}
 
 const loadingContact = ref(false)
 const savingContact = ref(false)
-const contactForm = ref({ phone: '', telegram: '', whatsapp: '' })
+const contactForm = ref({ phone: '', telegram: '', whatsapp: '', wechat: '' })
 
 async function loadContact() {
   loadingContact.value = true
   try {
     const data = await getContactInfo()
-    contactForm.value = { phone: data.phone || '', telegram: data.telegram || '', whatsapp: data.whatsapp || '' }
+    contactForm.value = { phone: data.phone || '', telegram: data.telegram || '', whatsapp: data.whatsapp || '', wechat: data.wechat || '' }
   } catch (e) {
     ElMessage.error(e?.message || 'Load failed')
   } finally {
@@ -362,7 +514,7 @@ async function saveContact() {
   savingContact.value = true
   try {
     const data = await updateContactInfo(contactForm.value)
-    contactForm.value = { phone: data.phone || '', telegram: data.telegram || '', whatsapp: data.whatsapp || '' }
+    contactForm.value = { phone: data.phone || '', telegram: data.telegram || '', whatsapp: data.whatsapp || '', wechat: data.wechat || '' }
     ElMessage.success(t('settings.contactInfoSaved'))
   } catch (e) {
     ElMessage.error(e?.message || 'Save failed')

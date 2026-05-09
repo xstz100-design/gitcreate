@@ -38,10 +38,11 @@ export function getCurrentUser() {
   })
 }
 
-export function getDashboardMetrics() {
+export function getDashboardMetrics(days = 7) {
   return request({
     url: '/api/auth/dashboard-metrics',
     method: 'get',
+    params: { days },
   })
 }
 
@@ -213,6 +214,85 @@ export function verifyPhoneWithTelegram(data) {
     url: '/api/auth/phone-verification/telegram-verify',
     method: 'post',
     data,
+  })
+}
+
+/**
+ * Telegram requestContact 一键关联手机号账号
+ */
+export function telegramContactLink(initData, contactData) {
+  return request({
+    url: '/api/auth/telegram-contact-link',
+    method: 'post',
+    data: { init_data: initData, contact_data: contactData },
+  })
+}
+
+/**
+ * Mini App 中用账号密码关联已有账号
+ */
+export function telegramLinkLogin(initData, username, password) {
+  return request({
+    url: '/api/auth/telegram-link-login',
+    method: 'post',
+    data: { init_data: initData, username, password },
+  })
+}
+
+/**
+ * 浏览器端：Telegram Login Widget 第三方登录
+ */
+export function telegramWidgetLogin(authData) {
+  return request({
+    url: '/api/auth/telegram-widget-login',
+    method: 'post',
+    data: authData,
+    suppressError: true,
+  })
+}
+
+/**
+ * Bot 深链登录：创建 token，获取 bot_url
+ */
+export function botLoginCreate() {
+  return request({
+    url: '/api/auth/bot-login/create',
+    method: 'post',
+    suppressError: true,
+  })
+}
+
+/**
+ * Bot 深链登录：轮询确认结果
+ */
+export function botLoginVerify(token) {
+  return request({
+    url: `/api/auth/bot-login/verify?token=${encodeURIComponent(token)}`,
+    method: 'get',
+    suppressError: true,
+  })
+}
+
+/**
+ * 浏览器端：请求 Telegram 验证码
+ */
+export function requestLoginOTP(phone) {
+  return request({
+    url: '/api/auth/otp/request',
+    method: 'post',
+    data: { phone },
+    suppressError: true,  // 由 Login.vue 自行处理 bot 引导逻辑
+  })
+}
+
+/**
+ * 浏览器端：验证码登录
+ */
+export function verifyLoginOTP(phone, code) {
+  return request({
+    url: '/api/auth/otp/verify',
+    method: 'post',
+    data: { phone, code },
   })
 }
 
@@ -418,15 +498,47 @@ export function getProductImportTemplateUrl() {
   return '/api/products/import/template'
 }
 
-/** 批量导入商品（CSV） */
-export function importProducts(file, overwrite = false) {
-  const fd = new FormData()
-  fd.append('file', file)
+/** 上传 CSV 批量导入商品 */
+export function importProducts(formData) {
   return request({
-    url: `/api/products/import?overwrite=${overwrite ? 'true' : 'false'}`,
+    url: '/api/products/import',
     method: 'post',
-    data: fd,
+    data: formData,
     headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+/** 查询临近过期商品（管理员） */
+export function listExpiringProducts(days = 30) {
+  return request({
+    url: '/api/products/expiring',
+    method: 'get',
+    params: { days },
+  })
+}
+
+// ============= 配送费按地址估算 =============
+export function estimateDeliveryFeeByAddress(origin, destination) {
+  return request({
+    url: '/api/settings/delivery-fee/estimate-by-address',
+    method: 'post',
+    data: { origin, destination },
+  })
+}
+
+// ============= Google Maps 设置 =============
+export function getGoogleMapsSettings() {
+  return request({
+    url: '/api/settings/google-maps',
+    method: 'get',
+  })
+}
+
+export function updateGoogleMapsSettings(data) {
+  return request({
+    url: '/api/settings/google-maps',
+    method: 'patch',
+    data,
   })
 }
 
@@ -511,7 +623,7 @@ export function uploadImage(file) {
   const formData = new FormData()
   formData.append('file', file)
   return request({
-    url: '/api/upload',
+    url: '/api/upload/image',
     method: 'post',
     data: formData,
     headers: { 'Content-Type': 'multipart/form-data' },

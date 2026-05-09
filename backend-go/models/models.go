@@ -15,6 +15,8 @@ type UserRole string
 const (
 	RoleAdmin    UserRole = "admin"
 	RoleMerchant UserRole = "merchant"
+	RolePicker   UserRole = "picker"
+	RoleDelivery UserRole = "delivery"
 )
 
 type ApprovalStatus string
@@ -67,7 +69,7 @@ type User struct {
 	FullName           string         `gorm:"size:100;not null" json:"full_name"`
 	Role               UserRole       `gorm:"size:20;default:'merchant'" json:"role"`
 	IsSuperAdmin       bool           `gorm:"default:false" json:"is_super_admin"`
-	Phone              *string        `gorm:"size:20;index" json:"phone"`
+	Phone              *string        `gorm:"size:20;uniqueIndex" json:"phone"`
 	Address            *string        `gorm:"size:200" json:"address"`
 	CreditLimit        float64        `gorm:"default:0" json:"credit_limit"`
 	BillingCycleDays   *int           `json:"billing_cycle_days"`
@@ -107,6 +109,8 @@ type Product struct {
 	PricePerPieceUSD   *float64   `gorm:"column:price_per_piece_usd" json:"price_per_piece_usd"`
 	PricePerPackageUSD *float64   `gorm:"column:price_per_package_usd" json:"price_per_package_usd"`
 	PiecesPerPackage   *int       `gorm:"column:pieces_per_package" json:"pieces_per_package"`
+	UnitName           *string    `gorm:"size:20;column:unit_name" json:"unit_name"`
+	PackName           *string    `gorm:"size:20;column:pack_name" json:"pack_name"`
 	Stock              int        `gorm:"default:0" json:"stock"`
 	StockWarning       int        `gorm:"default:10;column:stock_warning" json:"stock_warning"`
 	Description        *string    `gorm:"size:500" json:"description"`
@@ -123,8 +127,52 @@ type Product struct {
 	IsDeleted          bool       `gorm:"default:false;index;column:is_deleted" json:"is_deleted"`
 	ProductionDate     *time.Time `gorm:"column:production_date" json:"production_date"`
 	ExpiryDate         *time.Time `gorm:"column:expiry_date" json:"expiry_date"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+
+	// ── 供应商
+	SupplierName    *string `gorm:"size:200;column:supplier_name" json:"supplier_name"`
+	PrincipleCompany *string `gorm:"size:200;column:principle_company" json:"principle_company"`
+
+	// ── 商品基础扩展
+	UnitWeightValue *float64 `gorm:"column:unit_weight_value" json:"unit_weight_value"`
+	UnitWeightUnit  *string  `gorm:"size:10;column:unit_weight_unit" json:"unit_weight_unit"` // G/ML/Pcs
+	PackingFormat   *string  `gorm:"size:200;column:packing_format" json:"packing_format"`
+	PackSize        *float64 `gorm:"column:pack_size" json:"pack_size"`
+	GpPercent       *float64 `gorm:"column:gp_percent" json:"gp_percent"`
+	ShelfLifeDays   *int     `gorm:"column:shelf_life_days" json:"shelf_life_days"`
+
+	// ── 包装规格层级
+	InnerPackPerCase *int `gorm:"column:inner_pack_per_case" json:"inner_pack_per_case"`
+	UnitPerInnerPack *int `gorm:"column:unit_per_inner_pack" json:"unit_per_inner_pack"`
+	UnitPerCase      *int `gorm:"column:unit_per_case" json:"unit_per_case"`
+
+	// ── 成本与价格核算
+	CostPerCase    *float64 `gorm:"column:cost_per_case" json:"cost_per_case"`
+	DcPercent      *float64 `gorm:"column:dc_percent" json:"dc_percent"`
+	NetCostPerCase *float64 `gorm:"column:net_cost_per_case" json:"net_cost_per_case"`
+	NetCostPerUnit *float64 `gorm:"column:net_cost_per_unit" json:"net_cost_per_unit"`
+	PriceInclVat   *float64 `gorm:"column:price_incl_vat" json:"price_incl_vat"`
+	PriceExclVat   *float64 `gorm:"column:price_excl_vat" json:"price_excl_vat"`
+
+	// ── 包装尺寸 最小包
+	UnitWidthCm  *float64 `gorm:"column:unit_width_cm" json:"unit_width_cm"`
+	UnitLengthCm *float64 `gorm:"column:unit_length_cm" json:"unit_length_cm"`
+	UnitHeightCm *float64 `gorm:"column:unit_height_cm" json:"unit_height_cm"`
+	UnitWeightKg *float64 `gorm:"column:unit_weight_kg" json:"unit_weight_kg"`
+
+	// ── 包装尺寸 中包
+	PackWidthCm  *float64 `gorm:"column:pack_width_cm" json:"pack_width_cm"`
+	PackLengthCm *float64 `gorm:"column:pack_length_cm" json:"pack_length_cm"`
+	PackHeightCm *float64 `gorm:"column:pack_height_cm" json:"pack_height_cm"`
+	PackWeightKg *float64 `gorm:"column:pack_weight_kg" json:"pack_weight_kg"`
+
+	// ── 包装尺寸 外箱
+	CaseWidthCm  *float64 `gorm:"column:case_width_cm" json:"case_width_cm"`
+	CaseLengthCm *float64 `gorm:"column:case_length_cm" json:"case_length_cm"`
+	CaseHeightCm *float64 `gorm:"column:case_height_cm" json:"case_height_cm"`
+	CaseWeightKg *float64 `gorm:"column:case_weight_kg" json:"case_weight_kg"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (Product) TableName() string { return "products" }
@@ -244,10 +292,11 @@ func (SystemSetting) TableName() string { return "system_settings" }
 // ──────────────────────────── DailyMetric ────────────────────────────
 
 type DailyMetric struct {
-	ID        int64     `gorm:"primarykey;autoIncrement" json:"id"`
-	Date      string    `gorm:"uniqueIndex;size:10;not null" json:"date"`
-	PageViews int       `gorm:"default:0;column:page_views" json:"page_views"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ID          int64     `gorm:"primarykey;autoIncrement" json:"id"`
+	Date        string    `gorm:"uniqueIndex;size:10;not null" json:"date"`
+	PageViews   int       `gorm:"default:0;column:page_views" json:"page_views"`
+	ActiveUsers int       `gorm:"default:0;column:active_users" json:"active_users"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (DailyMetric) TableName() string { return "daily_metrics" }
@@ -264,3 +313,31 @@ type PhoneVerification struct {
 }
 
 func (PhoneVerification) TableName() string { return "phone_verifications" }
+
+// ──────────────────────────── StockLedger ────────────────────────────
+
+// StockLedgerReason 库存变动原因
+type StockLedgerReason string
+
+const (
+	LedgerOrderCreate   StockLedgerReason = "order_create"   // 下单扣减
+	LedgerOrderCancel   StockLedgerReason = "order_cancel"   // 取消回补
+	LedgerOrderDelete   StockLedgerReason = "order_delete"   // 删除回补
+	LedgerManualAdjust  StockLedgerReason = "manual_adjust"  // 手动调库
+	LedgerImport        StockLedgerReason = "import"         // 批量导入设置
+)
+
+// StockLedger 库存变动流水，只写不删
+type StockLedger struct {
+	ID         int64             `gorm:"primarykey;autoIncrement" json:"id"`
+	ProductID  int64             `gorm:"not null;index:ix_sl_product_created" json:"product_id"`
+	OrderID    *int64            `gorm:"index" json:"order_id,omitempty"`      // 关联订单（可空）
+	Delta      int               `gorm:"not null" json:"delta"`                // 正=入库，负=出库
+	StockAfter int               `gorm:"not null" json:"stock_after"`          // 变动后库存快照
+	Reason     StockLedgerReason `gorm:"size:30;not null" json:"reason"`
+	OperatorID *int64            `json:"operator_id,omitempty"`               // 操作人
+	Note       string            `gorm:"size:200;default:''" json:"note"`
+	CreatedAt  time.Time         `gorm:"index:ix_sl_product_created" json:"created_at"`
+}
+
+func (StockLedger) TableName() string { return "stock_ledger" }

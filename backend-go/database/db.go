@@ -36,8 +36,8 @@ func Connect(dsn string) {
 	if err != nil {
 		log.Fatalf("[DB] 获取底层连接失败: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(1) // SQLite 单写者模式
-	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetMaxOpenConns(5) // WAL 模式支持并发读，多连接可并行处理请求；写冲突由 busy_timeout 处理
+	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(3600 * time.Second)
 
 	autoMigrate()
@@ -57,6 +57,7 @@ func autoMigrate() {
 		&models.SystemSetting{},
 		&models.DailyMetric{},
 		&models.PhoneVerification{},
+		&models.StockLedger{},
 	)
 	if err != nil {
 		log.Fatalf("[DB] 自动迁移失败: %v", err)

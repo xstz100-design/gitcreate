@@ -43,7 +43,7 @@
       </el-col>
       
       <el-col :xs="12" :sm="8" :md="4">
-        <div class="stat-card clickable" :class="{ active: stockFilter === '' }" @click="stockFilter = ''">
+        <div class="stat-card">
           <div class="stat-icon" style="background: #16A34A">
             <el-icon :size="mobile ? 18 : 24"><goods /></el-icon>
           </div>
@@ -91,30 +91,46 @@
       </el-col>
     </el-row>
 
+    <!-- 7 日 PV/AU 趋势 -->
     <div class="content-card mb-lg">
       <div class="table-header">
-        <span class="table-title">{{ $t('admin.deliveryFeeRules') }}</span>
+        <span class="table-title">{{ $t('admin.pvAuTrend') }}</span>
+        <span class="table-subtitle">{{ $t('admin.last7Days') }}</span>
       </div>
-      <el-row :gutter="12">
-        <el-col :xs="24" :sm="10">
-          <el-form-item :label="$t('admin.freeDistanceKm')">
-            <el-input-number v-model="deliveryFeeForm.free_distance_km" :min="0" :step="0.5" :precision="1" style="width: 100%" />
-          </el-form-item>
-        </el-col>
-        <el-col :xs="24" :sm="10">
-          <el-form-item :label="$t('admin.feePerExtraKm')">
-            <el-input-number v-model="deliveryFeeForm.fee_per_extra_km_usd" :min="0" :step="0.1" :precision="2" style="width: 100%" />
-          </el-form-item>
-        </el-col>
-        <el-col :xs="24" :sm="4" class="delivery-save-col">
-          <el-button type="primary" :loading="savingDelivery" @click="saveDeliveryFeeSettings">{{ $t('common.save') }}</el-button>
-        </el-col>
-      </el-row>
+      <div v-if="mobile" class="dash-list">
+        <div class="dash-item dash-header">
+          <span class="dash-item-name" style="font-weight:600">{{ $t('common.date') }}</span>
+          <span class="dash-item-val" style="font-weight:600">PV</span>
+          <span class="dash-item-val" style="font-weight:600">AU</span>
+        </div>
+        <div v-for="m in metricsData" :key="m.date" class="dash-item">
+          <span class="dash-item-name">{{ m.date.slice(5) }}</span>
+          <span class="dash-item-val">{{ m.page_views }}</span>
+          <span class="dash-item-val" style="color:#0891B2">{{ m.active_users }}</span>
+        </div>
+        <div v-if="metricsData.length === 0" class="dash-empty">暂无数据</div>
+      </div>
+      <el-table v-else :data="metricsData" style="width:100%" size="small">
+        <el-table-column :label="$t('common.date')" prop="date" width="130" />
+        <el-table-column :label="$t('admin.pageViews')" prop="page_views" align="right" width="100" />
+        <el-table-column :label="$t('admin.dailyActiveUsers')" prop="active_users" align="right" width="100">
+          <template #default="{ row }">
+            <span style="color:#0891B2;font-weight:600">{{ row.active_users }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('admin.pvBar')" min-width="160">
+          <template #default="{ row }">
+            <div class="mini-bar-wrap">
+              <div class="mini-bar pv-bar" :style="{ width: maxPV ? (row.page_views / maxPV * 100) + '%' : '0' }"></div>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
-    
-    <el-row :gutter="mobile ? 0 : 24">
-      <el-col :xs="24" :sm="12">
-        <div class="content-card">
+
+    <el-row :gutter="16" style="align-items: stretch;">
+      <el-col :xs="24" :sm="12" style="display: flex; flex-direction: column;">
+        <div class="content-card" style="flex: 1;">
           <div class="data-table">
             <div class="table-header">
               <span class="table-title">
@@ -136,7 +152,7 @@
               <div v-if="displayProducts.length === 0" class="dash-empty">—</div>
             </div>
             <!-- 桌面端: 表格 -->
-            <el-table v-else :data="displayProducts" row-key="id" style="width: 100%" size="small">
+            <el-table v-else :data="displayProducts" row-key="id" style="width: 100%" size="small" :header-cell-style="{ whiteSpace: 'nowrap' }">
               <el-table-column :label="$t('product.name')" prop="name" min-width="150">
                 <template #default="{ row }">
                   <div style="display: flex; align-items: center; gap: 8px;">
@@ -145,19 +161,22 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('admin.currentStock')" width="100" align="right">
+              <el-table-column label="库存" width="100" align="right">
                 <template #default="{ row }">
                   <span :class="getStockColor(row)" class="font-semibold">{{ row.stock }}</span>
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('product.stockWarning')" prop="stock_warning" width="80" align="right" />
+              <el-table-column width="100" align="right">
+                <template #header><span style="white-space: nowrap;">预警</span></template>
+                <template #default="{ row }">{{ row.stock_warning }}</template>
+              </el-table-column>
             </el-table>
           </div>
         </div>
       </el-col>
       
-      <el-col :xs="24" :sm="12">
-        <div class="content-card">
+      <el-col :xs="24" :sm="12" style="display: flex; flex-direction: column;">
+        <div class="content-card" style="flex: 1;">
           <div class="data-table">
             <div class="table-header">
               <span class="table-title">{{ $t('admin.pendingOrdersTitle') }}</span>
@@ -197,8 +216,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Goods, Warning, List, User, Refresh, Clock } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus/es/components/message/index'
-import { getProducts, getOrders, getUserList, getDashboardMetrics, getDeliveryFeeSettings, updateDeliveryFeeSettings } from '@/api'
+import { getProducts, getOrders, getUserList, getDashboardMetrics } from '@/api'
 import { formatUSD } from '@/utils/format'
 
 // 移动端检测
@@ -219,20 +237,19 @@ const stats = ref({
   pageViews: 0,
 })
 
-const deliveryFeeForm = ref({
-  free_distance_km: 0,
-  fee_per_extra_km_usd: 0,
-})
-const savingDelivery = ref(false)
-
 const allProducts = ref([])
 const lowStockProducts = ref([])
 const slowMovingProducts = ref([])
 const pendingOrders = ref([])
+const metricsData = ref([])
 
-// 根据选中的筛选展示不同的商品列表
+const maxPV = computed(() => {
+  if (!metricsData.value.length) return 1
+  return Math.max(...metricsData.value.map(m => m.page_views || 0), 1)
+})
+
+// 根据选中的筛选展示不同的商品列表（默认显示预警，无"全部"选项）
 const displayProducts = computed(() => {
-  if (stockFilter.value === 'low') return lowStockProducts.value
   if (stockFilter.value === 'slow') return slowMovingProducts.value
   return lowStockProducts.value
 })
@@ -269,41 +286,20 @@ const loadStats = async () => {
     const merchants = await getUserList('merchant')
     stats.value.totalMerchants = merchants.length
 
-    const metric = await getDashboardMetrics()
-    stats.value.activeUsers = metric.active_users || 0
-    stats.value.pageViews = metric.page_views || 0
+    const metric = await getDashboardMetrics(7)
+    const metrics = metric.metrics || []
+    metricsData.value = [...metrics].reverse() // newest last for table display
+    const totalAU = metrics.reduce((sum, m) => sum + (m.active_users || 0), 0)
+    const totalPV = metrics.reduce((sum, m) => sum + (m.page_views || 0), 0)
+    stats.value.activeUsers = totalAU
+    stats.value.pageViews = totalPV
   } catch (error) {
     console.error('加载统计数据失败:', error)
   }
 }
 
-const loadDeliveryFeeSettings = async () => {
-  try {
-    const data = await getDeliveryFeeSettings()
-    deliveryFeeForm.value.free_distance_km = data.free_distance_km
-    deliveryFeeForm.value.fee_per_extra_km_usd = data.fee_per_extra_km_usd
-  } catch (error) {
-    console.error('加载配送费配置失败:', error)
-  }
-}
-
-const saveDeliveryFeeSettings = async () => {
-  savingDelivery.value = true
-  try {
-    const data = await updateDeliveryFeeSettings(deliveryFeeForm.value)
-    deliveryFeeForm.value.free_distance_km = data.free_distance_km
-    deliveryFeeForm.value.fee_per_extra_km_usd = data.fee_per_extra_km_usd
-    ElMessage.success('配送费规则已更新')
-  } catch (error) {
-    console.error('更新配送费配置失败:', error)
-  } finally {
-    savingDelivery.value = false
-  }
-}
-
 onMounted(() => {
   loadStats()
-  loadDeliveryFeeSettings()
 })
 </script>
 
@@ -347,6 +343,8 @@ onMounted(() => {
 .dash-item-val {
   font-weight: 600;
   white-space: nowrap;
+  min-width: 44px;
+  text-align: right;
 }
 
 .dash-item-warn {
@@ -359,6 +357,34 @@ onMounted(() => {
   padding: 16px 0;
   text-align: center;
   color: #c0c4cc;
+}
+
+.dash-header {
+  border-bottom: 2px solid #e6e8eb;
+  padding-bottom: 6px;
+}
+
+.table-subtitle {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 8px;
+}
+
+.mini-bar-wrap {
+  height: 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mini-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s;
+}
+
+.pv-bar {
+  background: linear-gradient(90deg, #3B82F6, #6366F1);
 }
 
 /* 三色圆点 */

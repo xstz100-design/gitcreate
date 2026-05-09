@@ -16,7 +16,7 @@ const router = createRouter({
     {
       path: '/m',
       component: () => import('@/layouts/MobileLayout.vue'),
-      meta: { requiresAuth: true, role: 'merchant', mobile: true },
+      meta: { requiresAuth: true, roles: ['merchant', 'picker', 'delivery'], mobile: true },
       children: [
         {
           path: '',
@@ -44,43 +44,11 @@ const router = createRouter({
         },
       ],
     },
-    // PC端商户路由 (Element Plus)
-    {
-      path: '/merchant',
-      component: () => import('@/layouts/MerchantLayout.vue'),
-      meta: { requiresAuth: true, role: 'merchant' },
-      children: [
-        {
-          path: '',
-          redirect: '/merchant/products',
-        },
-        {
-          path: 'products',
-          name: 'MerchantProducts',
-          component: () => import('@/views/merchant/Products.vue'),
-        },
-        {
-          path: 'cart',
-          name: 'MerchantCart',
-          component: () => import('@/views/merchant/Cart.vue'),
-        },
-        {
-          path: 'orders',
-          name: 'MerchantOrders',
-          component: () => import('@/views/merchant/Orders.vue'),
-        },
-        {
-          path: 'profile',
-          name: 'MerchantProfile',
-          component: () => import('@/views/merchant/Profile.vue'),
-        },
-      ],
-    },
-    // 管理端路由 (Element Plus)
+    // 管理端路由 (Element Plus) - 仅 admin 角色
     {
       path: '/admin',
       component: () => import('@/layouts/AdminLayout.vue'),
-      meta: { requiresAuth: true, role: 'admin' },
+      meta: { requiresAuth: true, roles: ['admin'] },
       children: [
         {
           path: '',
@@ -102,16 +70,16 @@ const router = createRouter({
           component: () => import('@/views/admin/Orders.vue'),
         },
         {
-          path: 'picking',
-          name: 'AdminPicking',
-          component: () => import('@/views/admin/Picking.vue'),
-        },
-        {
           path: 'settings',
           name: 'AdminSettings',
           component: () => import('@/views/admin/Settings.vue'),
         },
 
+        {
+          path: 'merchants',
+          name: 'AdminMerchants',
+          component: () => import('@/views/admin/Merchants.vue'),
+        },
         {
           path: 'approvals',
           redirect: '/admin/merchants',
@@ -152,8 +120,8 @@ router.beforeEach(async (to, from, next) => {
     if (inTelegram) {
       try {
         await userStore.telegramLogin(getInitData())
-        // 登录成功，管理员在TG中进入管理界面
-        if (userStore.isAdmin) {
+        // 登录成功，管理员使用管理端界面，商户使用移动端界面
+        if (userStore.isAdmin && !to.path.startsWith('/admin')) {
           next('/admin/dashboard')
           return
         }
@@ -174,7 +142,7 @@ router.beforeEach(async (to, from, next) => {
     if (userStore.isAdmin) {
       next('/admin/dashboard')
     } else if (userStore.isMerchant) {
-      next(isMobile() ? '/m/shop' : '/merchant/products')
+      next('/m/shop')
     } else {
       next('/m/shop')
     }
@@ -197,42 +165,21 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 角色不匹配 → 重定向
-  if (to.meta.role && userStore.userRole !== to.meta.role) {
+  // 支持 meta.role (单角色) 和 meta.roles (多角色数组)
+  const allowedRoles = to.meta.roles || (to.meta.role ? [to.meta.role] : null)
+  if (allowedRoles && !allowedRoles.includes(userStore.userRole)) {
+    // 管理员在 Telegram miniapp 中可以访问 /m/* 移动端路由
+    if (userStore.isAdmin && inTelegram && (to.path.startsWith('/m') || to.path === '/')) {
+      next()
+      return
+    }
     if (userStore.isAdmin) {
       next('/admin/dashboard')
     } else if (userStore.isMerchant) {
-      next(isMobile() ? '/m/shop' : '/merchant/products')
+      next('/m/shop')
     } else {
       next('/login')
     }
-    return
-  }
-
-  if ((to.path === '/merchant' || to.path.startsWith('/merchant/')) && isMobile() && userStore.isMerchant) {
-    // 路由映射: PC路径 → 移动路径
-    const routeMap = {
-      '/merchant': '/m/shop',
-      '/merchant/products': '/m/shop',
-      '/merchant/cart': '/m/cart',
-      '/merchant/orders': '/m/orders',
-      '/merchant/profile': '/m/profile',
-    }
-    const mobilePath = routeMap[to.path] || '/m/shop'
-    next(mobilePath)
-    return
-  }
-
-  if ((to.path === '/m' || to.path.startsWith('/m/')) && !isMobile() && userStore.isMerchant) {
-    // 路由映射: 移动路径 → PC路径
-    const routeMap = {
-      '/m': '/merchant/products',
-      '/m/shop': '/merchant/products',
-      '/m/cart': '/merchant/cart',
-      '/m/orders': '/merchant/orders',
-      '/m/profile': '/merchant/profile',
-    }
-    const pcPath = routeMap[to.path] || '/merchant/products'
-    next(pcPath)
     return
   }
 

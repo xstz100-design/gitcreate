@@ -53,12 +53,13 @@ export function formatDateTime(dateString) {
  */
 export function getPaymentStatusText(status) {
   const t = i18n.global.t
+  const key = (status || '').toLowerCase()
   const map = {
     unpaid: t('order.unpaid'),
     cash: t('order.cash'),
     monthly: t('order.monthly'),
   }
-  return map[status] || status
+  return map[key] || status
 }
 
 /**
@@ -66,13 +67,14 @@ export function getPaymentStatusText(status) {
  */
 export function getDeliveryStatusText(status) {
   const t = i18n.global.t
+  const key = (status || '').toLowerCase()
   const map = {
     pending: t('order.deliveryPending'),
     delivering: t('order.delivering'),
     delivered: t('order.delivered'),
     cancelled: t('order.cancelled'),
   }
-  return map[status] || status
+  return map[key] || status
 }
 
 /**

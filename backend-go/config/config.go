@@ -20,9 +20,11 @@ type Config struct {
 	AllowedOrigins []string
 
 	// Telegram
-	TelegramDeliveryChatID string
-	TelegramPickerChatID   string
-	TGBotToken             string
+	TGBotToken    string
+	TGBotUsername string
+
+	// Site
+	SiteURL string
 
 	// 货币汇率
 	USDToKHRRate float64
@@ -39,9 +41,9 @@ func Load(envFile string) {
 		SecretKey:                getEnv("SECRET_KEY", "your-secret-key-please-change-in-production-123456789"),
 		AccessTokenExpireMinutes: getInt("ACCESS_TOKEN_EXPIRE_MINUTES", 10080),
 		AllowedOrigins:           getStringSlice("ALLOWED_ORIGINS", []string{"*"}),
-		TelegramDeliveryChatID:   getEnv("TELEGRAM_DELIVERY_CHAT_ID", ""),
-		TelegramPickerChatID:     getEnv("TELEGRAM_PICKER_CHAT_ID", ""),
-		TGBotToken:               getEnv("TG_BOT_TOKEN", ""),
+		TGBotToken:               getEnv("TG_BOT_TOKEN", "8584315237:AAEuLvseKLQ7ZLa1SZKRQo2MaFg_1s3eRgc"),
+		TGBotUsername:            getEnv("TG_BOT_USERNAME", "testshopmouy_bot"),
+		SiteURL:                  getEnv("SITE_URL", "https://khmerai.cn"),
 		USDToKHRRate:             getFloat("USD_TO_KHR_RATE", 4000.0),
 	}
 }

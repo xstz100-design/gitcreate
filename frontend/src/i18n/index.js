@@ -1,6 +1,7 @@
 import { createI18n } from 'vue-i18n'
 import zh from './zh'
 import en from './en'
+import kh from './kh'
 
 const savedLang = localStorage.getItem('app-lang') || 'zh'
 
@@ -9,7 +10,7 @@ const i18n = createI18n({
   globalInjection: true,
   locale: savedLang,
   fallbackLocale: 'zh',
-  messages: { zh, en },
+  messages: { zh, en, kh },
 })
 
 export default i18n

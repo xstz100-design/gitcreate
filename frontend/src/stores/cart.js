@@ -49,7 +49,11 @@ export const useCartStore = defineStore(
           unit: product.unit,
           price_usd: unitPrice,
           purchase_mode: purchaseMode,
-          display_unit: purchaseMode === 'piece' ? '件' : purchaseMode === 'package' ? '包' : product.unit,
+          display_unit: purchaseMode === 'piece'
+            ? (product.unit_name || '件')
+            : purchaseMode === 'package'
+              ? (product.pack_name || '箱')
+              : product.unit,
           stock: product.stock,
           image_url: product.image_url,
           quantity,

@@ -64,9 +64,16 @@ function syncTelegramViewportVars(webApp) {
 
 function syncTelegramTheme(webApp) {
   const theme = webApp.themeParams || {}
-  const background = theme.bg_color || '#f5f5f5'
-  const header = theme.secondary_bg_color || theme.bg_color || '#ffffff'
-  const bottomBar = theme.bottom_bar_bg_color || theme.secondary_bg_color || background
+  const isDark = (webApp.colorScheme || '').toLowerCase() === 'dark'
+
+  // 应用 UI 已统一为白底 + 渐变细线（暗色模式时改用 Telegram 主题底色）
+  const appBg = isDark ? (theme.bg_color || '#1f2024') : '#ffffff'
+  const background = isDark ? (theme.bg_color || '#1f2024') : '#f8f9fa'
+  const header = appBg
+  const bottomBar = isDark ? (theme.bottom_bar_bg_color || theme.secondary_bg_color || appBg) : '#ffffff'
+
+  // 同步 data-theme 给 CSS 暗色变量切换
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
 
   webApp.setBackgroundColor(background)
 
