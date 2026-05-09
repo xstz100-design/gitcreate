@@ -35,8 +35,10 @@ type TelegramIncomingMsg struct {
 }
 
 type TelegramUser struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type TelegramChat struct {
@@ -113,7 +115,7 @@ func StartPolling(botToken string, stopCh <-chan struct{}) {
 
 				// 私聊消息：处理 /start 及账号关联引导
 				if chat.Type == "private" && upd.Message.From != nil {
-					services.HandlePrivateMessage(database.DB, upd.Message.From.ID, upd.Message.Text)
+					services.HandlePrivateMessage(database.DB, upd.Message.From.ID, upd.Message.From.FirstName, upd.Message.From.LastName, upd.Message.Text)
 				}
 			}
 		}

@@ -346,8 +346,8 @@ func HandleBotCallback(db *gorm.DB, update map[string]interface{}) {
 }
 
 // HandlePrivateMessage 处理用户私聊 Bot 的消息
-// 用于：1) 收到 /start 时记录 chat_id；2) Bot 深链登录确认；3) 未绑定时引导关联
-func HandlePrivateMessage(db *gorm.DB, tgID int64, text string) {
+// 用于：1) 收到 /start 时记录 chat_id；2) Bot 深链登录确认（自动注册）；3) 未绑定时引导关联
+func HandlePrivateMessage(db *gorm.DB, tgID int64, firstName, lastName, text string) {
 	token := config.C.TGBotToken
 	if token == "" {
 		return
@@ -360,21 +360,44 @@ func HandlePrivateMessage(db *gorm.DB, tgID int64, text string) {
 		loginToken := strings.TrimPrefix(trimmed, "/start login_")
 		loginToken = strings.TrimSpace(loginToken)
 		if loginToken != "" {
-			// 查找该 TG ID 对应的账号
 			var user models.User
-			if err := db.Where("telegram_id = ? AND is_active = ?", tgID, true).First(&user).Error; err == nil {
-				// 调用 handlers 包的确认函数（通过接口避免循环引用）
-				if BotLoginConfirmFunc != nil && BotLoginConfirmFunc(loginToken, user.ID) {
-					msg := fmt.Sprintf("✅ 您好，<b>%s</b>！\n\n登录验证成功，请返回网页，已自动登录。", user.FullName)
-					go utils.SendTelegramMessage(token, chatIDStr, msg, nil)
-				} else {
-					go utils.SendTelegramMessage(token, chatIDStr, "❌ 登录链接无效或已过期，请重新点击网页上的登录按钮。", nil)
+			// 先查找是否已有账号（含非活跃）
+			err := db.Where("telegram_id = ?", tgID).First(&user).Error
+			if err != nil {
+				// 未注册：自动创建商户账号
+				fullName := strings.TrimSpace(firstName + " " + lastName)
+				if fullName == "" {
+					fullName = fmt.Sprintf("TG_%d", tgID)
 				}
-			} else {
-				// 未注册账号
-				siteURL := config.C.SiteURL
-				msg := fmt.Sprintf("❌ 该 Telegram 账号尚未注册。\n\n请联系管理员在 <b>%s</b> 为您创建账号。", siteURL)
+				username := fmt.Sprintf("tg_%d", tgID)
+				hashed, _ := utils.HashPassword(fmt.Sprintf("tg_auto_%d", tgID))
+				tgIDCopy := tgID
+				user = models.User{
+					Username:       username,
+					HashedPassword: hashed,
+					FullName:       fullName,
+					Role:           models.RoleMerchant,
+					TelegramID:     &tgIDCopy,
+					ApprovalStatus: models.ApprovalApproved,
+					IsActive:       true,
+					NotifyEnabled:  true,
+					CreatedAt:      models.NowCambodia(),
+				}
+				if err2 := db.Create(&user).Error; err2 != nil {
+					go utils.SendTelegramMessage(token, chatIDStr, "❌ 创建账号失败，请稍后重试。", nil)
+					return
+				}
+			} else if !user.IsActive {
+				go utils.SendTelegramMessage(token, chatIDStr, "❌ 您的账号已被禁用，请联系管理员。", nil)
+				return
+			}
+
+			// 确认登录
+			if BotLoginConfirmFunc != nil && BotLoginConfirmFunc(loginToken, user.ID) {
+				msg := fmt.Sprintf("✅ 您好，<b>%s</b>！\n\n登录验证成功，请返回网页，已自动登录。", utils.EscapeHTML(user.FullName))
 				go utils.SendTelegramMessage(token, chatIDStr, msg, nil)
+			} else {
+				go utils.SendTelegramMessage(token, chatIDStr, "❌ 登录链接无效或已过期，请重新点击网页上的登录按钮。", nil)
 			}
 			return
 		}
@@ -385,16 +408,16 @@ func HandlePrivateMessage(db *gorm.DB, tgID int64, text string) {
 	if db.Where("telegram_id = ? AND is_active = ?", tgID, true).First(&user).Error == nil {
 		// 已绑定，回复欢迎语（仅 /start 时）
 		if trimmed == "/start" {
-			msg := fmt.Sprintf("👋 您好，<b>%s</b>！\n\n您的账号已绑定 Telegram，可在网页登录页面点击「Telegram 登录」按钮快速登录。", user.FullName)
+			msg := fmt.Sprintf("👋 您好，<b>%s</b>！\n\n您的账号已绑定 Telegram，可在网页登录页面点击「Telegram 登录」按钮快速登录。", utils.EscapeHTML(user.FullName))
 			go utils.SendTelegramMessage(token, chatIDStr, msg, nil)
 		}
 		return
 	}
 
-	// 未绑定，发送引导说明
+	// 未绑定，引导使用登录按钮
 	siteURL := config.C.SiteURL
 	msg := fmt.Sprintf(
-		"👋 您好！\n\n请联系管理员在 <b>%s</b> 为您创建账号，绑定您的 Telegram 后即可使用一键登录。",
+		"👋 您好！\n\n请访问 <b>%s</b> 并点击「Telegram 登录」按钮，首次登录将自动为您创建账号。",
 		siteURL,
 	)
 	go utils.SendTelegramMessage(token, chatIDStr, msg, nil)

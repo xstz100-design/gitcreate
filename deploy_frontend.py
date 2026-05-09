@@ -18,7 +18,7 @@ def run(cmd):
 run('sudo mkdir -p /opt/wholesale/frontend/dist/assets')
 run('sudo chown -R ubuntu:ubuntu /opt/wholesale/frontend/')
 
-dist_dir = r'E:\Program_ayang\vue\frontend\dist'
+dist_dir = r'E:\python-demo\vue\frontend\dist'
 remote_base = '/opt/wholesale/frontend/dist'
 
 sftp = ssh.open_sftp()

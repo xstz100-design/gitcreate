@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 	"wholesale/models"
+	"wholesale/utils"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -76,6 +77,38 @@ func autoMigrate() {
 
 	// 确保超级管理员字段已存在（兼容旧数据库）
 	ensureSuperAdmin()
+	// 首次启动时创建默认管理员
+	seedDefaultAdmin()
+}
+
+// seedDefaultAdmin 如果数据库中没有任何管理员，创建默认管理员账号
+func seedDefaultAdmin() {
+	var count int64
+	DB.Model(&models.User{}).Where("role = ?", models.RoleAdmin).Count(&count)
+	if count > 0 {
+		return
+	}
+	hashed, err := utils.HashPassword("admin123")
+	if err != nil {
+		log.Printf("[DB] seedDefaultAdmin hash error: %v", err)
+		return
+	}
+	admin := models.User{
+		Username:       "admin",
+		HashedPassword: hashed,
+		FullName:       "Super Admin",
+		Role:           models.RoleAdmin,
+		IsActive:       true,
+		IsSuperAdmin:   true,
+		NotifyEnabled:  false,
+		ApprovalStatus: models.ApprovalApproved,
+		CreatedAt:      models.NowCambodia(),
+	}
+	if err := DB.Create(&admin).Error; err != nil {
+		log.Printf("[DB] seedDefaultAdmin error: %v", err)
+		return
+	}
+	log.Println("[DB] 已创建默认管理员账号: admin / admin123，请登录后立即修改密码！")
 }
 
 // ensureSuperAdmin 如果存在旧 admin 账号(100001)，设置 is_super_admin=1

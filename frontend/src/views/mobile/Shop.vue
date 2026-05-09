@@ -133,16 +133,10 @@
           <!-- 名称 -->
           <div class="card-name">{{ product.name }}</div>
 
-          <!-- 进货价 -->
+          <!-- 参考价 -->
           <div class="card-price">
             <span class="price-val">${{ product.price_usd }}</span>
             <span class="price-unit">/{{ product.unit }}</span>
-          </div>
-
-          <!-- 建议零售价 -->
-          <div v-if="product.retail_price_usd" class="card-retail">
-            <span class="retail-label">{{ $t('product.retailPrice') }}:</span>
-            <span class="retail-val">${{ product.retail_price_usd }}</span>
           </div>
 
           <!-- 加购按钮 -->
@@ -226,14 +220,14 @@
           <!-- 购买规格表（参考电商下单界面：规格/单价/数量三列） -->
           <div class="purchase-table">
             <div class="pt-header">
-              <span class="pt-col-spec">规格</span>
-              <span class="pt-col-price">单价</span>
-              <span class="pt-col-qty">数量</span>
+              <span class="pt-col-spec">{{ $t('product.specs') }}</span>
+              <span class="pt-col-price">{{ $t('product.tableUnitPrice') }}</span>
+              <span class="pt-col-qty">{{ $t('product.tableQty') }}</span>
             </div>
             <!-- 默认单件 -->
             <div class="pt-row">
-              <span class="pt-spec">{{ currentProduct.unit_name || currentProduct.unit || '件' }}</span>
-              <span class="pt-price">${{ currentProduct.price_usd }}<em>/{{ currentProduct.unit || '件' }}</em></span>
+              <span class="pt-spec">{{ currentProduct.unit_name || currentProduct.unit || $t('product.unitFallback') }}</span>
+              <span class="pt-price">${{ Number(currentProduct.price_usd).toFixed(2) }}<em>/{{ currentProduct.unit || $t('product.unitFallback') }}</em></span>
               <div class="pt-stepper" @click.stop>
                 <van-stepper
                   v-model="detailQtyDefault"
@@ -245,13 +239,22 @@
                 />
               </div>
             </div>
-            <!-- 箱装（如有） -->
-            <div v-if="currentProduct.price_per_package_usd" class="pt-row">
+            <!-- 箱装（只要设了每箱件数就显示，价格=单独设置价 或 参考价×件数） -->
+            <div v-if="currentProduct.pieces_per_package" class="pt-row">
               <span class="pt-spec">
-                {{ currentProduct.pack_name || '箱' }}
-                <span v-if="currentProduct.pieces_per_package" class="pt-spec-hint">({{ currentProduct.pieces_per_package }}件/箱)</span>
+                {{ currentProduct.pack_name || $t('product.caseFallback') }}
+                <span class="pt-spec-hint">({{ currentProduct.pieces_per_package }}{{ currentProduct.unit || $t('product.unitFallback') }}/{{ currentProduct.pack_name || $t('product.caseFallback') }})</span>
               </span>
-              <span class="pt-price">${{ currentProduct.price_per_package_usd }}<em>/箱</em></span>
+              <span class="pt-price">
+                <template v-if="currentProduct.price_per_package_usd">
+                  <s class="pt-price-original">${{ (Number(currentProduct.price_usd) * Number(currentProduct.pieces_per_package)).toFixed(2) }}</s>
+                  ${{ Number(currentProduct.price_per_package_usd).toFixed(2) }}
+                </template>
+                <template v-else>
+                  ${{ (Number(currentProduct.price_usd) * Number(currentProduct.pieces_per_package)).toFixed(2) }}
+                </template>
+                <em>/{{ currentProduct.pack_name || $t('product.caseFallback') }}</em>
+              </span>
               <div class="pt-stepper" @click.stop>
                 <van-stepper
                   v-model="detailQtyPackage"
@@ -262,13 +265,6 @@
                 />
               </div>
             </div>
-          </div>
-
-          <!-- 建议零售价 -->
-          <div v-if="currentProduct.retail_price_usd" class="detail-retail-row">
-            <span class="retail-tag">{{ $t('product.retailPrice') }}</span>
-            <span class="retail-price">${{ currentProduct.retail_price_usd }}</span>
-            <span class="retail-khr">≈ {{ formatKHR(usdToKhr(currentProduct.retail_price_usd)) }}</span>
           </div>
 
           <div class="detail-meta">
@@ -605,7 +601,7 @@ const addFromDetail = () => {
     cartStore.addItem(currentProduct.value, detailQtyDefault.value, 'default')
     added = true
   }
-  if (detailQtyPackage.value > 0 && currentProduct.value.price_per_package_usd) {
+  if (detailQtyPackage.value > 0 && currentProduct.value.pieces_per_package) {
     cartStore.addItem(currentProduct.value, detailQtyPackage.value, 'package')
     added = true
   }
@@ -1414,6 +1410,14 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: 400;
   color: #999;
+}
+
+.pt-price-original {
+  font-size: 11px;
+  font-weight: 400;
+  color: #bbb;
+  text-decoration: line-through;
+  margin-right: 3px;
 }
 
 .pt-col-spec { }

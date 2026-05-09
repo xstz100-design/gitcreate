@@ -3,7 +3,6 @@
   <div class="desktop-wrapper" :class="{ 'tg-frame-mode': isTgContext }">
     <div class="mobile-layout" :class="{ 'has-shell-header': showShellHeader, 'tg-frame-mode': isTgContext }">
       <div v-if="showShellHeader" class="mobile-header">
-        <img src="/images/logo2.svg" alt="Logo" class="mobile-logo" />
         <button class="lang-switch" @click="toggleLang">
           {{ langLabel }}
         </button>

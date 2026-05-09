@@ -4,7 +4,6 @@
     <el-header v-if="!mobile">
       <div class="header-content">
         <div class="header-left">
-          <img src="/images/logo2.svg" alt="Logo" class="header-logo" />
         </div>
         <div class="header-right">
           <button class="lang-btn" @click="toggleLang">{{ langLabel }}</button>
@@ -25,7 +24,6 @@
 
     <!-- 移动端 header -->
     <div v-if="mobile" class="mobile-header">
-      <img src="/images/logo2.svg" alt="Logo" class="header-logo" />
       <button class="lang-btn" @click="toggleLang">{{ currentLang === 'zh' ? 'EN' : '中文' }}</button>
     </div>
     

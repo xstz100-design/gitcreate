@@ -66,14 +66,6 @@
           {{ formatUSD(row.price_usd) }}
         </template>
       </el-table-column>
-      <el-table-column :label="$t('product.retailPrice')" width="110" sortable prop="retail_price_usd">
-        <template #default="{ row }">
-          <span v-if="row.retail_price_usd" style="color: #d4a017; font-weight: 600;">
-            {{ formatUSD(row.retail_price_usd) }}
-          </span>
-          <span v-else style="color: #ccc;">-</span>
-        </template>
-      </el-table-column>
       <el-table-column :label="$t('product.stock')" width="90" sortable prop="stock">
         <template #default="{ row }">
           <el-tag :type="row.is_low_stock ? 'warning' : 'success'" size="small">
@@ -399,11 +391,6 @@
                 </el-form-item>
               </el-col>
               <el-col :xs="12" :sm="6">
-                <el-form-item :label="$t('productForm.retailPriceUSD')">
-                  <el-input v-model="form.retail_price_usd" inputmode="decimal" placeholder="0.00" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="12" :sm="6">
                 <el-form-item :label="$t('productForm.gpPercent')">
                   <el-input v-model="form.gp_percent" inputmode="decimal" placeholder="0.00" style="width:100%">
                     <template #suffix>%</template>
@@ -675,7 +662,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Delete, Goods, Upload, Camera, Search } from '@element-plus/icons-vue'
 import { Document } from '@element-plus/icons-vue'
@@ -864,7 +851,6 @@ const form = reactive({
   packing_format: '',
   pack_size: '',
   price_usd: '',
-  retail_price_usd: '',
   gp_percent: '',
   shelf_life_days: '',
   principle_company: '',
@@ -906,6 +892,18 @@ const form = reactive({
 })
 
 const openSections = ref(['supplier', 'basic', 'names', 'packing', 'cost', 'dimensions'])
+
+// 生产日 + 保质期天数 → 自动计算过期日
+watch(
+  [() => form.production_date, () => form.shelf_life_days],
+  ([date, days]) => {
+    if (date && days && Number(days) > 0) {
+      const d = new Date(date)
+      d.setDate(d.getDate() + Number(days))
+      form.expiry_date = d.toISOString().substring(0, 10)
+    }
+  }
+)
 
 const rules = {
   name: [{ required: true, message: () => t('product.nameRequired'), trigger: 'blur' }],
@@ -998,7 +996,7 @@ const resetForm = () => {
     sort_order: 0, barcode: '', brand: '', category: '', name: '',
     unit_weight_value: '', unit_weight_unit: 'G',
     packing_format: '', pack_size: '',
-    price_usd: '', retail_price_usd: '', gp_percent: '',
+    price_usd: '', gp_percent: '',
     shelf_life_days: '', principle_company: '', country_of_origin: '',
     production_date: null, expiry_date: null,
     image_url: '', img1: '', img2: '', img3: '', img4: '', img5: '',
@@ -1053,7 +1051,6 @@ const handleEdit = (row) => {
     is_featured: row.is_featured || false,
     // numeric string fields
     price_usd: toStr(row.price_usd),
-    retail_price_usd: toStr(row.retail_price_usd),
     price_per_piece_usd: toStr(row.price_per_piece_usd),
     price_per_package_usd: toStr(row.price_per_package_usd),
     pieces_per_package: toStr(row.pieces_per_package),

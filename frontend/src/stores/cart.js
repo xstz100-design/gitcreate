@@ -21,8 +21,13 @@ export const useCartStore = defineStore(
       if (purchaseMode === 'piece' && product.price_per_piece_usd) {
         return Number(product.price_per_piece_usd)
       }
-      if (purchaseMode === 'package' && product.price_per_package_usd) {
-        return Number(product.price_per_package_usd)
+      if (purchaseMode === 'package') {
+        if (product.price_per_package_usd) {
+          return Number(product.price_per_package_usd)
+        }
+        if (product.pieces_per_package) {
+          return Number(product.price_usd) * Number(product.pieces_per_package)
+        }
       }
       return Number(product.price_usd)
     }

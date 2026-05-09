@@ -3,7 +3,6 @@
 
     <!-- ══ Telegram 内：全屏自动登录 ══ -->
     <div v-if="isTgContext" class="tg-autoscreen">
-      <img src="/images/logo1.svg" alt="Logo" class="tg-auto-logo" />
       <div v-if="tgAutoLoading" class="tg-auto-body">
         <div class="tg-spinner"></div>
         <p>正在登录…</p>
@@ -20,7 +19,6 @@
       <div class="login-card">
         <div class="login-header">
           <div class="logo-container">
-            <img src="/images/logo1.svg" alt="Logo" class="logo-image" />
           </div>
         </div>
 
