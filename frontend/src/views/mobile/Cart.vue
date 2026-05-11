@@ -111,29 +111,16 @@
           show-word-limit
           @focus="handleInputFocus"
         />
-        <!-- 配送距离 & 运费估算 -->
-        <van-field
-          v-model="distanceInput"
-          :label="$t('cart.distanceKm')"
-          :placeholder="$t('cart.distanceKmPlaceholder')"
-          type="number"
-          :readonly="!formEditable"
-          clearable
-          @blur="handleDistanceBlur"
-          @focus="handleInputFocus"
-        >
-          <template #button>
-            <van-button size="small" type="primary" :loading="estimatingFee" @click="doEstimateFee">估算</van-button>
-          </template>
-        </van-field>
+        <!-- 配送费（根据地址自动估算，不需要手动输入距离） -->
         <van-cell :title="$t('cart.deliveryFee')">
           <template #value>
             <span v-if="estimatingFee" style="color:#999">计算中...</span>
             <span v-else-if="deliveryFee !== null" style="color:#ee0a24;font-weight:600">${{ deliveryFee.toFixed(2) }}</span>
             <span v-else style="color:#999">--</span>
           </template>
-          <template v-if="autoEstimated && !estimatingFee" #label>
-            <span style="font-size:11px;color:#52c41a">📍 已根据您保存的定位自动估算</span>
+          <template v-if="!estimatingFee" #label>
+            <span v-if="autoEstimated" style="font-size:11px;color:#52c41a">📍 已根据您的收货地址自动计算</span>
+            <span v-else-if="deliveryFee === null" style="font-size:11px;color:#999">请先在个人资料中设置收货地址</span>
           </template>
         </van-cell>
       </van-cell-group>
@@ -183,7 +170,7 @@ import { useI18n } from 'vue-i18n'
 import { showSuccessToast, showToast, showDialog } from 'vant'
 import { useCartStore } from '@/stores/cart'
 import { useUserStore } from '@/stores/user'
-import { createOrder, estimateDeliveryFee, estimateDeliveryFeeByAddress } from '@/api'
+import { createOrder, estimateDeliveryFeeByAddress } from '@/api'
 import { formatKHR, usdToKhr } from '@/utils/format'
 import { hapticFeedback } from '@/utils/device'
 
@@ -198,32 +185,11 @@ const submitting = ref(false)
 const clientRequestId = ref('')
 const showPaymentPicker = ref(false)
 
-// 运费估算
-const distanceInput = ref('')
+// 运费估算（自动，基于用户地址 vs 仓库地址）
+const distanceKm = ref(0)
 const deliveryFee = ref(null)
 const estimatingFee = ref(false)
 const autoEstimated = ref(false)
-
-const doEstimateFee = async () => {
-  const km = parseFloat(distanceInput.value)
-  if (isNaN(km) || km < 0) return
-  estimatingFee.value = true
-  try {
-    const res = await estimateDeliveryFee(km)
-    deliveryFee.value = res.fee ?? res.delivery_fee ?? res.amount ?? null
-  } catch {
-    deliveryFee.value = null
-  } finally {
-    estimatingFee.value = false
-  }
-}
-
-const handleDistanceBlur = () => {
-  if (distanceInput.value !== '') {
-    autoEstimated.value = false
-    doEstimateFee()
-  }
-}
 
 // 根据用户保存的 Google 定位自动估算运费
 const autoEstimateFromLocation = async () => {
@@ -235,11 +201,11 @@ const autoEstimateFromLocation = async () => {
   estimatingFee.value = true
   try {
     const res = await estimateDeliveryFeeByAddress('', destination)
-    if (res.distance_km !== undefined) distanceInput.value = String(Number(res.distance_km).toFixed(1))
+    if (res.distance_km !== undefined) distanceKm.value = Number(res.distance_km)
     deliveryFee.value = res.delivery_fee_usd ?? null
     autoEstimated.value = true
   } catch {
-    // 静默失败，用户可手动填写
+    // 静默失败
   } finally {
     estimatingFee.value = false
   }
@@ -473,6 +439,7 @@ const handleSubmit = async () => {
     await createOrder({
       items,
       ...orderForm.value,
+      distance_km: distanceKm.value,
       client_request_id: clientRequestId.value,
     })
     
